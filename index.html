@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Experiment</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9C%8B%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+<!-- The ASL tutor's own screen. Everything in it is scoped under .tutor-, so
+     it costs nothing on the pages that do not use it. -->
+<link rel="stylesheet" href="css/tutor.css">
+</head>
+<body>
+
+<!-- The camera view. It lives here once and gets moved into whichever screen
+     needs it, so the webcam is never restarted mid-study. -->
+<div id="stage" hidden>
+  <!-- Everything inside .mirror is flipped left-to-right so the participant
+       sees themselves as they would in a mirror. Text is deliberately kept
+       OUTSIDE this div, otherwise it would appear backwards. -->
+  <div class="mirror">
+    <canvas id="overlay"></canvas>
+  </div>
+  <div id="live-readout" class="readout"></div>
+  <div id="trial-timer" class="timer"></div>
+  <div id="countdown" class="countdown"></div>
+</div>
+
+<main>
+
+  <!-- Shown only when config.js has no Firebase settings, so it is obvious that
+       the task is running but nothing is being recorded. -->
+  <div id="demo-banner" class="banner" hidden>
+    <strong>Demo mode.</strong> Firebase is not set up, so <strong>nothing is being
+    saved</strong>. The task still runs and you can see the tracking working. To
+    collect real data, fill in <code>config.js</code>
+    (<a href="docs/SETUP.md">setup instructions</a>).
+  </div>
+
+  <!-- Shown when ?replay= is playing recorded landmarks instead of using the
+       camera (js/core/replay.js). Replayed landmarks are not a participant's
+       data, so nothing is uploaded in this mode even if Firebase is set up. -->
+  <div id="replay-banner" class="banner subtle-banner" hidden>
+    <strong>Replay mode.</strong> This page is reading recorded landmarks from
+    <code id="replay-file"></code> instead of your camera, and
+    <strong>nothing is being saved</strong>.
+  </div>
+
+  <!-- Shown when MediaPipe could not get a GPU context and fell back to the
+       CPU. Not an error: the task works, just at a lower frame rate. -->
+  <div id="cpu-banner" class="banner subtle-banner" hidden>
+    Your computer could not use its graphics card for tracking, so this is
+    running on the CPU. It still works, but it may feel a little slower.
+  </div>
+
+  <!-- 1. Consent ------------------------------------------------------- -->
+  <section id="screen-consent" class="screen">
+    <h1 id="study-title">Study</h1>
+    <p class="subtle" id="study-lab"></p>
+    <h2 id="experiment-title"></h2>
+
+    <div id="consent-intro" class="prose"></div>
+
+    <!-- The consent document. The link below always works, even where the
+         browser refuses to display a PDF inline (common on phones). -->
+    <div id="consent-doc-wrap">
+      <iframe id="consent-doc" title="Consent form"></iframe>
+    </div>
+    <p class="subtle">
+      Trouble viewing it?
+      <a id="consent-download" href="#" target="_blank" rel="noopener">
+        Open the consent form in a new tab</a>.
+    </p>
+
+    <div id="consent-affirmations"></div>
+
+    <button id="btn-consent" class="primary" disabled>
+      I agree, continue
+    </button>
+    <p class="subtle">If you do not wish to take part, simply close this page.</p>
+  </section>
+
+  <!-- 2. Demographics --------------------------------------------------- -->
+  <section id="screen-demographics" class="screen">
+    <h2>A few questions before we start</h2>
+    <p class="subtle">Questions marked <span class="req">*</span> are required.
+       The rest are optional.</p>
+
+    <div id="demographics-form"></div>
+
+    <button id="btn-demographics" class="primary">Continue</button>
+  </section>
+
+  <!-- 3. Loading -------------------------------------------------------- -->
+  <section id="screen-loading" class="screen visible">
+    <div class="spinner"></div>
+    <p id="loading-text">Loading…</p>
+  </section>
+
+  <!-- 4 -------------------------------------------------------------- -->
+  <section id="screen-position" class="screen">
+    <h2>Let's check your camera</h2>
+    <p>Hold your hand up in front of the camera. When we can see it clearly,
+       the button below will turn on.</p>
+    <div id="position-stage-slot"></div>
+    <p id="position-status" class="status">Looking for your hand…</p>
+    <button id="btn-position-done" class="primary" disabled>Continue</button>
+    <details class="help">
+      <summary>Nothing is showing up?</summary>
+      <ul>
+        <li>Make sure the room is reasonably bright, and that the light is in
+            front of you rather than behind you.</li>
+        <li>Hold your hand about 40 to 60&nbsp;cm from the camera.</li>
+        <li>Plain background helps. Move away from busy patterns.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- 5 -------------------------------------------------------------- -->
+  <section id="screen-instructions" class="screen">
+    <h2>Instructions</h2>
+    <div id="instructions-text" class="prose"></div>
+    <button id="btn-start" class="primary">I'm ready, start</button>
+  </section>
+
+  <!-- 6 -------------------------------------------------------------- -->
+  <section id="screen-trial" class="screen">
+    <div class="progress">
+      <span id="progress-label"></span>
+      <div class="progress-bar"><div id="progress-bar-fill"></div></div>
+    </div>
+    <p id="trial-prompt" class="prompt"></p>
+    <div id="trial-stage-slot"></div>
+    <!-- An optional slot for an experiment's own HTML, filled by exp.mount().
+         It is deliberately OUTSIDE the mirrored stage above, so any text put
+         here reads the right way round. Experiments without a mount() leave it
+         hidden and this screen looks exactly as it did before. -->
+    <div id="exp-mount" hidden></div>
+  </section>
+
+  <!-- 7 -------------------------------------------------------------- -->
+  <section id="screen-rest" class="screen">
+    <h2>Nice work</h2>
+    <p>Take a short break. Shake out your hand if you'd like.</p>
+    <p class="subtle" id="rest-progress"></p>
+    <button id="btn-next-trial" class="primary">Start the next one</button>
+  </section>
+
+  <!-- 8 -------------------------------------------------------------- -->
+  <section id="screen-saving" class="screen">
+    <div class="spinner"></div>
+    <p id="saving-text">Saving…</p>
+    <p class="subtle">Please don't close this page.</p>
+  </section>
+
+  <!-- 9 -------------------------------------------------------------- -->
+  <section id="screen-done" class="screen">
+    <h2>All done. Thank you!</h2>
+
+    <div id="done-results"></div>
+
+    <p id="done-saved-line">Your responses have been saved.<br>
+       <span class="subtle">Session ID: <code id="done-session-id"></code></span></p>
+
+    <!-- Shown only when some of the recording could not be uploaded. The
+         session is still finished and still saved; this says plainly that part
+         of it is missing rather than letting it disappear quietly. -->
+    <p id="done-upload-warning" class="bad" hidden>
+      Some of your data could not be saved
+      (<span id="done-upload-warning-count"></span> recordings).
+      Everything else went through, and the details are stored with your
+      session. There is nothing you need to do.
+    </p>
+
+    <div id="done-demo" hidden>
+      <!-- Replaced with the replay wording when this run came from a file. -->
+      <p id="done-demo-reason"><strong>Nothing was saved.</strong> This is a demo and no
+         Firebase project is connected.</p>
+      <button id="btn-download-demo" class="primary">Download my data as JSON</button>
+      <p class="subtle">The file matches what <code>analysis/fetch_data.py</code>
+         produces, so you can drop it into <code>data/raw/</code> and run
+         <code>python analysis/compute_metrics.py</code> on it right away.</p>
+    </div>
+
+    <p id="done-redirect-note" class="subtle"></p>
+  </section>
+
+  <!-- 10 -------------------------------------------------------------- -->
+  <section id="screen-error" class="screen">
+    <h2 class="bad">Something went wrong</h2>
+    <p id="error-message"></p>
+    <p class="subtle" id="error-detail"></p>
+    <p class="subtle">If this keeps happening, please contact the research team.</p>
+  </section>
+
+</main>
+
+<!-- How an unattended run reports itself. tools/e2e-smoke.sh dumps the page
+     after a replay and reads document.body's data-e2e ("done" or "error")
+     plus the JSON in here. It is outside the screens, and empty, so a normal
+     session neither shows nor writes anything to it. -->
+<pre id="e2e-result" hidden></pre>
+
+<script type="module">
+  import { main } from "./js/core/experiment.js";
+  main();
+</script>
+</body>
+</html>

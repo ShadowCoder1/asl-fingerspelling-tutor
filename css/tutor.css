@@ -1,0 +1,313 @@
+/* tutor.css: the ASL tutor's own screen.
+ *
+ * Scoped under .tutor- so it cannot reach anything else on the page; the
+ * platform's own variables (css/style.css) supply every color, so the tutor is
+ * the same warm, light page as the rest of the study.
+ *
+ * LAYOUT. On a wide screen the camera and the PANEL (the letter, what the tutor
+ * says, the reference picture) sit side by side, so the learner's eyes travel
+ * a hand's width between their own hand and the letter, not a screen's height;
+ * the FOOT (points, the letter map, the standing notes) runs underneath both.
+ * On a narrow screen everything stacks. All of it is CSS: `:has()` notices
+ * that the trial screen holds a tutor, and `display: contents` lets the
+ * tutor's two groups take part in the trial screen's grid.
+ *
+ * NOTHING HERE CARRIES INFORMATION BY COLOR ALONE. The mastery map's four
+ * states each print a word; the feedback tones differ in color AND in the text
+ * they hold. A learner who cannot tell the greens apart loses nothing. */
+
+/* `hidden` has to win. The browser hides [hidden] elements with a plain
+ * `display: none`, and ANY display rule on the element beats it -- the
+ * reference panel below is `display: flex`, so `reference.hidden = true` did
+ * nothing, and the last letter's picture stayed up beside the next letter's
+ * test (first working camera session, 2026-09-20: a B being asked for next to
+ * a drawing of an L). tests/tutor-css.test.js pins this rule. */
+.tutor [hidden] { display: none !important; }
+
+.tutor {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+/* ---- the wide layout ----------------------------------------------------- */
+
+@media (min-width: 900px) {
+  main:has(#screen-trial.visible .tutor) { max-width: 1120px; }
+
+  #screen-trial.visible:has(.tutor) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas:
+      "progress progress"
+      "stage    panel"
+      "foot     foot";
+    gap: 18px 28px;
+    align-items: start;
+  }
+  #screen-trial:has(.tutor) .progress { grid-area: progress; }
+  #screen-trial:has(.tutor) #trial-stage-slot { grid-area: stage; }
+  #screen-trial:has(.tutor) #trial-stage-slot #stage { margin: 0; }
+  #screen-trial:has(.tutor) #exp-mount,
+  #screen-trial:has(.tutor) .tutor { display: contents; }
+  #screen-trial:has(.tutor) .tutor-panel { grid-area: panel; }
+  #screen-trial:has(.tutor) .tutor-foot { grid-area: foot; }
+  #screen-trial:has(.tutor) .tutor-debug { grid-column: 1 / -1; }
+}
+
+/* The forty-second cap is a safety net, not a race. A countdown in the corner
+   of the picture made every letter feel timed. The cap still applies. */
+#screen-trial:has(.tutor) .timer { display: none; }
+
+/* ---- the panel: the letter, and what the tutor says ---------------------- */
+
+.tutor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tutor-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1.3rem 1.2rem 1.1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.tutor-label {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+.tutor-cue-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  transition: opacity 0.2s ease;
+}
+
+.tutor-ring {
+  width: 168px;
+  height: 168px;
+  /* The ring starts at twelve o'clock and fills clockwise, the way a timer
+     reads, rather than from wherever SVG happens to start an arc. */
+  transform: rotate(-90deg);
+}
+
+.tutor-ring-track,
+.tutor-ring-fill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.tutor-ring-track { stroke: var(--soft); }
+
+.tutor-ring-fill {
+  stroke: var(--accent);
+  /* Short enough that the ring still reads as live, long enough that a jittery
+     progress value does not make it twitch. */
+  transition: stroke-dashoffset 80ms linear;
+}
+
+.tutor-cue {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* The reward: one brief warm glow, no flashing, no movement. It fades out on
+   its own even if the class is left on, so a stuck timer cannot leave the page
+   pulsing at somebody. */
+.tutor-flash .tutor-cue { color: var(--good); }
+.tutor-flash .tutor-ring-track { stroke: var(--good-soft); }
+.tutor-flash { animation: tutor-glow 600ms ease-out 1; }
+
+@keyframes tutor-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(30, 158, 106, 0.45); }
+  100% { box-shadow: 0 0 0 20px rgba(30, 158, 106, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutor-flash { animation: none; }
+  .tutor-ring-fill { transition: none; }
+}
+
+/* ---- what the tutor says ------------------------------------------------ */
+
+.tutor-said {
+  width: 100%;
+  min-height: 3.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tutor-feedback {
+  margin: 0;
+  padding: 0.55rem 0.9rem;
+  border-radius: 12px;
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+.tutor-feedback:empty { padding: 0; }
+
+/* A hint is a note from a tutor, so it looks like one. */
+.tutor-tone-correction { background: var(--tip); box-shadow: inset 0 0 0 1px var(--tip-line); color: #4d3d0c; }
+/* A camera complaint is not the learner's mistake, so it is the muted color,
+   not the red one. */
+.tutor-tone-sensor { background: var(--soft); color: var(--subtle); }
+.tutor-tone-neutral { color: var(--subtle); }
+.tutor-tone-done { background: var(--soft); color: var(--text); }
+.tutor-tone-reveal { background: var(--soft); color: var(--text); }
+.tutor-tone-correct { background: var(--good-soft); color: #11613f; font-weight: 800; }
+
+.tutor-status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--subtle);
+  min-height: 1.3rem;
+}
+
+/* ---- the reference picture ---------------------------------------------- */
+
+.tutor-reference {
+  margin: 0;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.tutor-picture {
+  width: 150px;
+  height: auto;
+  /* The drawings are dark ink on white; a quiet frame keeps the white plate
+     from floating on a white card. */
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px;
+}
+
+.tutor-caption {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--subtle);
+}
+
+.tutor-describe {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tutor-mnemonic {
+  margin: 0;
+  text-align: center;
+  color: var(--subtle);
+  font-style: italic;
+}
+
+/* ---- the foot: points, the letter map, the standing notes ---------------- */
+
+.tutor-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.tutor-score {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+}
+
+.tutor-points {
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  background: var(--good-soft);
+  color: #11613f;
+  font-weight: 800;
+}
+
+/* Which hint policy is running is a fact for whoever is debugging, not for the
+   learner. It is still in the page (and in the log); ?debug=1 shows it. */
+.tutor-policy { display: none; font-size: 0.8rem; }
+#exp-mount:has(.tutor-debug) .tutor-policy { display: inline; }
+
+.tutor-map {
+  display: grid;
+  grid-template-columns: repeat(13, 1fr);
+  gap: 6px;
+}
+@media (max-width: 640px) {
+  .tutor-map { grid-template-columns: repeat(9, 1fr); }
+}
+
+.tutor-cell {
+  padding: 6px 1px 5px;
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+  text-align: center;
+  line-height: 1.15;
+  color: var(--subtle);
+}
+
+.tutor-cell-letter { display: block; font-size: 0.95rem; font-weight: 800; }
+.tutor-cell-state { display: block; font-size: 0.6rem; font-weight: 600; min-height: 0.7rem; }
+
+/* A letter this session does not teach: dim, and with no state word at all,
+   so "not taught here" never reads as "failed". */
+.tutor-cell-absent { opacity: 0.4; box-shadow: none; background: transparent; }
+
+.tutor-cell-introduced { color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); background: var(--tip); }
+.tutor-cell-passed { color: #11613f; box-shadow: inset 0 0 0 2px var(--good); background: var(--good-soft); }
+.tutor-cell-retired { color: #fff; background: var(--good); box-shadow: none; }
+
+/* ---- the notes that stay on screen --------------------------------------- */
+
+.tutor-note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--subtle);
+}
+
+/* The ring while it is held shut (reading time, end-of-trial dwell). */
+.tutor-paused .tutor-ring { opacity: 0.35; }
+
+/* ?debug=1 only (experiments/asl-tutor/debug.js). Deliberately plain. */
+.tutor-debug { margin-top: 1rem; padding: 0.7rem 0.9rem; background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius); font-size: 0.8rem; }
+.tutor-debug-head { display: flex; gap: 0.8rem; align-items: center; margin-bottom: 0.4rem; }
+.tutor-debug button { font: inherit; font-weight: 700; padding: 0.25rem 0.7rem; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); cursor: pointer; }
+.tutor-debug pre { margin: 0; white-space: pre-wrap; font: 0.76rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
