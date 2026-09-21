@@ -104,7 +104,7 @@ async function run(exp) {
     ui.setText("#replay-file", `${replay.path} (${replayData.frames.length} frames)`);
     console.warn(`Replay mode: playing ${replay.path}. The camera is not used and nothing is saved.`);
   } else if (fb.configLooksUnfilled()) {
-    ui.$("#demo-banner").hidden = false;
+    if (SCREENS.demoBanner !== false) ui.$("#demo-banner").hidden = false;
     console.warn(
       "Demo mode: Firebase is not configured, so nothing will be saved. " +
       "Fill in FIREBASE in config.js to collect data (see docs/SETUP.md)."

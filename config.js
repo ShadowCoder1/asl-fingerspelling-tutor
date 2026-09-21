@@ -78,6 +78,12 @@ export const STUDY = {
 export const SCREENS = {
   consent: false,
   demographics: false,
+  // The yellow "Demo mode. Firebase is not set up, so nothing is being saved"
+  // strip across the top. Off for the shared demo link, where it reads as an
+  // error to a visitor. The same sentence still goes to the browser console.
+  // It only ever shows while FIREBASE above is unfilled, so turning it back on
+  // costs nothing once data is really being collected.
+  demoBanner: false,
 };
 
 
