@@ -23,12 +23,12 @@
  * Firebase Console -> Project settings -> Your apps -> Web app -> Config
  * ---------------------------------------------------------------------------*/
 export const FIREBASE = {
-  apiKey:            "PASTE_YOUR_API_KEY_HERE",
-  authDomain:        "PASTE_YOUR_PROJECT_ID_HERE.firebaseapp.com",
-  projectId:         "PASTE_YOUR_PROJECT_ID_HERE",
-  storageBucket:     "PASTE_YOUR_PROJECT_ID_HERE.firebasestorage.app",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID_HERE",
-  appId:             "PASTE_YOUR_APP_ID_HERE",
+  apiKey:            "AIzaSyApTrks4atErUpF9Q-8RJSbR0Za-KDQ-Xc",
+  authDomain:        "asl-fingerspelling-study-cmu.firebaseapp.com",
+  projectId:         "asl-fingerspelling-study-cmu",
+  storageBucket:     "asl-fingerspelling-study-cmu.firebasestorage.app",
+  messagingSenderId: "1085289015018",
+  appId:             "1:1085289015018:web:4421875d6fe6c0d34e1993",
 };
 
 
@@ -38,7 +38,7 @@ export const FIREBASE = {
  * The name of a file in experiments/ (without the .js).
  * You can also override this in the URL:  index.html?exp=my-experiment
  * ---------------------------------------------------------------------------*/
-export const ACTIVE_EXPERIMENT = "asl-tutor";
+export const ACTIVE_EXPERIMENT = "asl-study";
 
 
 /* -----------------------------------------------------------------------------
@@ -76,8 +76,12 @@ export const STUDY = {
  * What the two screens contain is set below (CONSENT) and in questions.js.
  * ---------------------------------------------------------------------------*/
 export const SCREENS = {
-  consent: false,
-  demographics: false,
+  // On since data is being saved (2026-09-21): the public link must not save
+  // a stranger's hands without asking. Off is only for a demo that saves nothing.
+  consent: true,
+  // On: the short questionnaire (questions.js) is part of the study design.
+  demographics: true,
+  postQuestions: true,
   // The yellow "Demo mode. Firebase is not set up, so nothing is being saved"
   // strip across the top. Off for the shared demo link, where it reads as an
   // error to a visitor. The same sentence still goes to the browser console.

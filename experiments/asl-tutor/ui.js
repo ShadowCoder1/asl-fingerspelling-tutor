@@ -47,14 +47,18 @@ const MASTERY_STATES = {
   retired: { label: "learned", className: "tutor-cell tutor-cell-retired" },
 };
 
-export function mountTutor(el, { letters, hintPolicy }) {
+/* `layout: "study"` (experiments/asl-study.js) is JT's stripped screen: the
+ * camera, the letter with its ring, the picture -- no points, no letter map,
+ * no standing notes (they are on the instructions page instead). Every id the
+ * code looks up still exists, so nothing below has to know which layout it is. */
+export function mountTutor(el, { letters, hintPolicy, layout = "tutor" }) {
   /* Two groups, so the stylesheet can put them where it likes: the PANEL (the
    * letter, what the tutor says, the reference picture) sits beside the camera
    * on a wide screen; the FOOT (points, the letter map, the standing notes)
    * runs underneath both. Every id and class the code below looks up is
    * unchanged. */
   el.innerHTML = `
-    <div class="tutor">
+    <div class="tutor tutor-layout-${layout}">
       <div class="tutor-panel">
         <div class="tutor-main">
           <p class="tutor-label" id="tutor-label">Sign this letter</p>
@@ -80,7 +84,7 @@ export function mountTutor(el, { letters, hintPolicy }) {
         </figure>
       </div>
 
-      <div class="tutor-foot">
+      <div class="tutor-foot"${layout === "study" ? " hidden" : ""}>
         <div class="tutor-score">
           <span class="tutor-points"><span id="tutor-points">0</span> right</span>
           <span class="tutor-policy subtle">hints: ${hintPolicy}</span>
@@ -164,7 +168,7 @@ export function mountTutor(el, { letters, hintPolicy }) {
     cue({ letter, showPicture, pictureUrl, describe, mnemonic }) {
       nodes.cue.textContent = letter;
       // Copying a picture and recalling a shape are different jobs; say which.
-      nodes.label.textContent = showPicture ? "Copy this letter" : "Sign this letter";
+      nodes.label.textContent = showPicture ? "Copy this letter" : (layout === "study" ? "Make this letter" : "Sign this letter");
       nodes.feedback.textContent = "";
       nodes.feedback.className = "tutor-feedback";
       helper = showPicture ? "Copy the picture, then hold your hand still." : "Make the shape, then hold your hand still.";

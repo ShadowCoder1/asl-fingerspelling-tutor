@@ -177,7 +177,7 @@ export function parseMaxTrials(raw) {
   return { value: n, complaint: null };
 }
 
-function parseHintPolicy(raw) {
+export function parseHintPolicy(raw) {
   if (raw === null || raw === "") return "strict";
   if (raw === "strict" || raw === "lenient") return raw;
   complaints.push(`?hints=${raw} is not a hint policy; it has to be "strict" or "lenient".`);

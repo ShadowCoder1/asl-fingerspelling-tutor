@@ -408,6 +408,10 @@ async function run(exp) {
     // so people can shake out a tired hand after fifteen seconds of tapping;
     // after a two-second handshape they are just a click in the way.
     if (upcoming && !trial.skipRest) {
+      // An experiment may use the break to announce its next part.
+      ui.setText("#rest-heading", trial.restHeading ?? "Nice work");
+      ui.setHtml("#rest-text", trial.restHtml ?? "<p>Take a short break. Shake out your hand if you'd like.</p>");
+      ui.setText("#btn-next-trial", trial.restButton ?? "Start the next one");
       ui.showScreen("screen-rest");
       ui.setText("#rest-progress", trialSource.total != null
         ? `${i + 1} of ${trialSource.total} done`

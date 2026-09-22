@@ -82,11 +82,15 @@ export const STATUS_MIN_GAP_MS = 1500;
  * just been revealed. They are logged with the session (TUTOR_VERSION). */
 export const END_DWELL_MS = Object.freeze({
   "intro-done": 1000, accept: 1300, corrected: 1300, failed: 5000, sensor: 3000,
+  recorded: 800,    // "Recorded." -- a quiz answer, or a teach letter the model cannot grade
 });
 export const HOLD_OFF_MS = Object.freeze({
   intro: 1500,      // a picture and a description to look at first
+  teach: 1500,
   test: 700,        // one letter to read
   review: 700,
+  pre: 700,
+  post: 700,
   correction: 2200, // a hint sentence, usually with the picture beside it
   borderline: 1200,
   sensor: 1500,
@@ -176,6 +180,25 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
   // inherit half of the previous one's.
   let t = null;
 
+  /* THE STUDY'S TRIAL KINDS (experiments/asl-study.js, JT's design of
+   * 2026-09-21), beside the tutor's intro / test / review:
+   *   pre, post   a QUIZ. The letter alone; the first hold is recorded and the
+   *               trial ends. The learner is told only that it was recorded --
+   *               never whether it was right. The model's verdict is still
+   *               logged, tier-blind, so pre/post accuracy can be read off the
+   *               session without re-grading; it is never shown.
+   *   teach       the letter WITH its picture, like an intro: a correct hold
+   *               ends it, a wrong one gets the hint, and after INTRO_MAX_MISSES
+   *               it moves on. A letter the model does not grade (tier 2, or J
+   *               and Z, which are movements) is recorded on its first hold and
+   *               moves on -- the picture did the teaching. */
+  const isQuiz = (kind) => kind === "pre" || kind === "post";
+  const isIntroLike = (kind) => kind === "intro" || kind === "teach";
+  // A letter the model has a class for. Tests stub the model with a tier
+  // table alone, so the tiers are the fallback.
+  const inModel = (letter) => (model.letters ? model.letters.includes(letter) : letter in model.tiers);
+  const gradable = (letter) => inModel(letter) && model.tiers[letter] === 1;
+
   function startTrial(trial) {
     t = {
       trial,
@@ -197,7 +220,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
     };
 
     const spec = letterSpec(trial.letter);
-    const intro = trial.kind === "intro";
+    const intro = isIntroLike(trial.kind);
     return [{
       kind: "cue",
       letter: trial.letter,
@@ -231,12 +254,16 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
     if (t.ended) return [];   // the runner has one more frame in flight; ignore it
     t.commits++;
 
-    const graded = t.kind !== "intro";
+    const graded = !isIntroLike(t.kind) && !isQuiz(t.kind);
     // An intro is never scored, but it IS verified, tier-blind, and logged: a
     // session's intro attempts are the only record of what a learner's hand
     // looked like before they were told anything, and they cost nothing to
     // keep. `graded: false` on the row says the tutor acted on none of it.
-    const v = verify(model, x, t.letter, quality, graded ? undefined : { ignoreTier: true });
+    // A letter the model has no class for (J, Z) gets a null verdict, not a
+    // crash: the hold is still the data.
+    const v = inModel(t.letter)
+      ? verify(model, x, t.letter, quality, graded ? undefined : { ignoreTier: true })
+      : { outcome: null, reason: "not-in-model", score: NaN, d2: NaN, gate: NaN, rival: null, tier: null };
 
     const base = {
       trialId: t.trial.id,
@@ -284,6 +311,12 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       repeat: false,
     };
 
+    if (isQuiz(t.kind) || (t.kind === "teach" && !gradable(t.letter))) {
+      // Recorded and done. `consumed` stays false: nothing was charged to the
+      // learner, and the analysis reads `outcome` (null for J and Z).
+      t.lastOutcome = v.outcome;
+      return [log("attempt", base), say("Recorded.", "done"), ...end("recorded")];
+    }
     if (!graded) return onIntroCommit(base, v, x, samePose);
     if (samePose === true && (t.lastOutcome === "reject" || t.lastOutcome === "abstain")) {
       base.repeat = true;
@@ -341,7 +374,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       (e.kind === "feedback" ? { ...e, showPicture: false, pictureUrl: null, describe: null } : e));
     const effects = [log("attempt", base), ...correction];
     if (t.attempts >= INTRO_MAX_MISSES) {
-      effects.push(say(`Let's move on — ${t.letter} will come back as a test.`, "done"), ...end("intro-done"));
+      effects.push(say(t.kind === "teach" ? "Let's move on." : `Let's move on — ${t.letter} will come back as a test.`, "done"), ...end("intro-done"));
     } else {
       effects.push(holdOff(HOLD_OFF_MS.correction));
     }
@@ -615,11 +648,14 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
    * would be overwritten (or worse, overwrite it). */
   function summary() {
     // "The learner was never given a verdict on this trial." See finishTrial.
-    const ungraded = t.kind !== "intro" && t.attempts === 0;
+    const ungraded = !isIntroLike(t.kind) && !isQuiz(t.kind) && t.attempts === 0;
     return {
       letter: t.letter,
       kind: t.kind,
       attempts: t.attempts,
+      // The model's last verdict on this trial, shown or not. On a quiz it is
+      // the one thing the study measures, and it was never shown.
+      outcome: t.lastOutcome,
       // null, not false, when ungraded: `false` reads as a real wrong answer,
       // and an analyst who forgets to join on `ungraded` would recreate the
       // exact bug ungraded reporting exists to prevent, one layer up (m7).

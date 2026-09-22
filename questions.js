@@ -129,10 +129,61 @@ export const DEMOGRAPHIC_QUESTIONS = [
               "More than one race",
               "Prefer not to say"] },
 
+  // For the fingerspelling study (experiments/asl-study.js).
+  { id: "knowsAslAlphabet",
+    label: "Do you know the American Sign Language (ASL) fingerspelling alphabet?",
+    type: "radio",
+    required: true,
+    options: ["No, not at all",
+              "A few letters",
+              "Most of the letters",
+              "All of it, but slowly",
+              "Yes, fluently"] },
+
+  { id: "signLanguageExperience",
+    label: "Have you ever studied or used any sign language?",
+    type: "select",
+    required: true,
+    options: ["Never",
+              "A little (a class, an app, a few signs)",
+              "Some (a course or regular use for under a year)",
+              "A lot (more than a year)",
+              "I am a native or fluent signer"] },
+
   { id: "participantId",
     label: "Name or Prolific ID",
     type: "text",
     help: "Used only to link your responses. Leave blank for an anonymous ID.",
     placeholder: "e.g. 5f3c..." },
+
+];
+
+/* =============================================================================
+ *  AFTER the task. Same format. Shown on its own screen once the last trial
+ *  is done and before the results; saved in the session document as
+ *  `postQuestionnaire`. An empty list means no screen.
+ * ===========================================================================*/
+export const POST_QUESTIONS = [
+
+  { id: "confidence",
+    label: "How confident are you that you could fingerspell the whole alphabet now?",
+    type: "radio",
+    required: true,
+    options: ["Not at all", "A little", "Somewhat", "Quite", "Very"] },
+
+  { id: "hardestLetters",
+    label: "Which letters were hardest? (optional)",
+    type: "text",
+    placeholder: "e.g. M N T" },
+
+  { id: "feedbackHelped",
+    label: "In the learning part, did the corrections (what to change) help?",
+    type: "radio",
+    required: true,
+    options: ["They were wrong or confusing", "They did not help much", "They helped a bit", "They helped a lot", "I did not get any"] },
+
+  { id: "comments",
+    label: "Anything else? Problems with the camera, things that were unclear. (optional)",
+    type: "textarea" },
 
 ];
