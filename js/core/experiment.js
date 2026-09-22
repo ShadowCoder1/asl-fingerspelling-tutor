@@ -241,7 +241,9 @@ async function run(exp) {
   }
 
   /* ---- 5. Instructions -------------------------------------------------- */
-  ui.setHtml("#instructions-text", exp.instructions ?? "");
+  // May be a function of the questionnaire answers (the study words its
+  // instructions around the participant's dominant hand).
+  ui.setHtml("#instructions-text", (typeof exp.instructions === "function" ? exp.instructions({ demographics, participant }) : exp.instructions) ?? "");
   ui.showScreen("screen-instructions");
   await ui.waitForClick("#btn-start");
 
@@ -296,6 +298,7 @@ async function run(exp) {
     mountEl.hidden = false;
     exp.mount(mountEl, {
       participant,
+      demographics,
       condition: participant.condition,
       video: videoInfo,
     });

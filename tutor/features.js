@@ -118,7 +118,15 @@ function buildFeatures(P) {
   // Orientation in the camera frame -- deliberately not normalized away; see
   // the header comment.
   for (let i = 0; i < 3; i++) emit(n[i], `palmnormal_${"xyz"[i]}`, "orientation");
-  for (let i = 0; i < 3; i++) emit(y[i], `handdir_${"xyz"[i]}`, "orientation");
+  // handdir_x is FOLDED: fingers pointing to the left of the picture and to
+  // the right are one direction. No two letters differ by that alone, and the
+  // training data has sideways letters (H, G, P, Q) pointed both ways -- as a
+  // signed number H was two opposite clusters, its class overlapped U, and its
+  // accept threshold rose until it refused 95% of real H hands
+  // (research/allletters-2026-09-22/). |x| is continuous, so an upright hand
+  // (x near 0) is not made jittery by it.
+  emit(Math.abs(y[0]), "handdir_x", "orientation");
+  for (let i = 1; i < 3; i++) emit(y[i], `handdir_${"xyz"[i]}`, "orientation");
 
   return { values, names, blocks };
 }

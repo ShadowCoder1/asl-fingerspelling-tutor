@@ -177,9 +177,25 @@ export function hintFor(letter, block) {
 // 26 letters now have a shipped picture.
 export const PICTURE_LETTERS = Object.freeze(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]);
 
-// These drawings show the VIEWER's view -- what the other person, watching
-// the learner's hand, sees -- not the signer's own view of their hand.
-export const PICTURE_CAPTION = "What the other person sees.";
+/* WHICH WAY ROUND. The clip art is not consistent: 20 letters are drawn as
+ * the OTHER person sees a right hand, and G H P Q X Z as the signer sees their
+ * own right hand. The camera picture on the page is mirrored, so a learner
+ * matched an "other person's view" drawing on screen by using their LEFT hand
+ * -- the owner did exactly that for two sessions (every hold read as a left
+ * hand), and JT's testers switched hands. So the 20 are shown flipped: every
+ * picture now shows what a correct RIGHT hand looks like on the learner's own
+ * (mirrored) screen. Found by thumb side and forearm side, letter by letter,
+ * 2026-09-22; the tracker cannot read line drawings to check it. */
+export const PICTURES_DRAWN_FROM_VIEWER = Object.freeze(["A", "B", "C", "D", "E", "F", "I", "J", "K", "L", "M", "N", "O", "R", "S", "T", "U", "V", "W", "Y"]);
+export const PICTURE_CAPTION = "How it looks on your screen.";
+
+/* Should this letter's picture be flipped left-right, for a learner signing
+ * with `hand`? For a right hand, the 20 viewer-view drawings; for a left hand,
+ * the other six (which makes every picture a left hand on screen). */
+export function pictureMirrored(letter, hand = "right") {
+  const viewer = PICTURES_DRAWN_FROM_VIEWER.includes(letter);
+  return hand === "left" ? !viewer : viewer;
+}
 
 export function pictureUrl(letter) {
   return PICTURE_LETTERS.includes(letter) ? `assets/letters/${letter}.svg` : null;

@@ -35,8 +35,16 @@ import { drawLandmarks } from "../js/core/experiment.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 
 const MODEL_PATH = "tutor/model.json";
-export const STUDY_VERSION = "asl-study/1";
-export const DEFAULT_REPS = Object.freeze({ pre: 2, teach: 10, post: 2 });
+export const STUDY_VERSION = "asl-study/2";
+// JT, 2026-09-22: one pass for each test, ten for teaching.
+export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
+
+/* Which hand to sign with, from the questionnaire's dominantHand. Everyone is
+ * asked to use ONE hand; "Left" means the left, anything else the right (the
+ * pictures are drawn for a right hand, tutor/letters.js). */
+export function studyHand(demographics) {
+  return /^left/i.test(demographics?.dominantHand ?? "") ? "left" : "right";
+}
 const PHASES = ["pre", "teach", "post"];
 
 /* A quiz trial that never gets a hold ends here, recorded as no answer; a
@@ -126,23 +134,28 @@ export default {
 
   maxTrials: plannedTrials(),
 
-  instructions: `
-    <p>This study has three parts and takes about 25 minutes.</p>
+  instructions: ({ demographics } = {}) => `
+    <p><strong>Use only your ${studyHand(demographics)} hand</strong> for every letter,
+       and keep your other hand out of the picture. A letter made with the other
+       hand does not count.</p>
+    <p>This study has three parts and takes about 20 minutes.</p>
     <ol>
       <li><strong>First, a check of what you already know.</strong> A letter
           appears; make its handshape with one hand and <strong>hold it
           still</strong> until the ring closes. You will not be told whether
           it was right.</li>
       <li><strong>Then, learning.</strong> Each letter comes with a picture to
-          copy, ten times over, and you are told what to change.</li>
+          copy, ten times over, and you are told what to change. J and Z are
+          movements: draw the letter in the air, then hold still.</li>
       <li><strong>Then the check again.</strong></li>
     </ol>
-    <p>Either hand is fine. Keep your hand in the picture, a comfortable
-       distance from the camera; it does not have to be perfectly still.</p>
+    <p>Keep your hand in the picture, a comfortable distance from the camera;
+       it does not have to be perfectly still. The dots on your hand show it is
+       being tracked.</p>
     <p class="subtle">The grading comes from a model built on public data and
        can be wrong. This teaches fingerspelling handshapes, not ASL.</p>`,
 
-  mount(el, { participant }) {
+  mount(el, { participant, demographics }) {
     let letters = LETTERS.slice(), reps = { ...DEFAULT_REPS };
     try {
       letters = parseStudyLetters(params.get("letters"));
@@ -156,11 +169,11 @@ export default {
 
     const plan = buildPlan(letters, reps, seed);
     session = {
-      letters, reps, seed, seedSource: urlSeed ? "url" : "participantId", plan,
+      letters, reps, seed, seedSource: urlSeed ? "url" : "participantId", plan, hand: studyHand(demographics),
       model: null, modelSha: null, engine: null, sessionLogged: false, replayExhausted: false,
       results: [],
     };
-    view = mountTutor(el, { letters, hintPolicy, layout: "study" });
+    view = mountTutor(el, { letters, hintPolicy, layout: "study", hand: session.hand });
     if (debugOn) debug = createDebug(el, { getModel: () => session.model, canSave: !params.has("replay") });
   },
 
@@ -188,7 +201,7 @@ export default {
   onTrialStart(trial, { tracker }) {
     session.engine.startTrial(trial);
     debug?.trialStart(trial);
-    return { tracker, addEvent: null, overlay: trial.kind === "teach" };
+    return { tracker, addEvent: null, overlay: true };
   },
 
   onFrame({ landmarks, handedness, handednessScore, tMs, trial, state, video, addEvent, endTrial }) {
@@ -198,7 +211,7 @@ export default {
       addEvent("study-session", sessionRecord());
     }
     const flat = landmarks ? flattenRounded(landmarks, DECIMALS) : null;
-    const out = session.engine.frame({ tMs, flat, aspect: video.aspect, videoHeight: video.height });
+    const out = session.engine.frame({ tMs, flat, aspect: video.aspect, videoHeight: video.height, handedness });
     view.progress(out.progress);
     view.paused(out.paused);
     applyEffects(out.effects, { trial, addEvent, endTrial });
@@ -214,8 +227,9 @@ export default {
     return derived;
   },
 
-  draw(ctx, { landmarks, trial, canvas }) {
-    if (trial.kind === "teach") drawLandmarks(ctx, canvas, landmarks);
+  // Dots on the hand in every part (JT): people should see they are tracked.
+  draw(ctx, { landmarks, canvas }) {
+    drawLandmarks(ctx, canvas, landmarks);
   },
 
   onTrialEnd({ state, endReason }) {
@@ -225,9 +239,12 @@ export default {
     }
     const s = session.engine.summary();
     const row = {
-      letter: s.letter, kind: s.kind, attempts: s.attempts, outcome: s.outcome ?? null,
+      letter: s.letter, kind: s.kind, attempts: s.attempts, outcome: s.outcome ?? null, wrongHand: !!s.wrongHand,
+      // THE study measure: the model accepted it AND it was made with the asked-for hand.
+      correct: s.outcome === "accept" && !s.wrongHand,
       firstAttemptCorrect: s.firstAttemptCorrect, assisted: s.assisted, finalOutcome: s.finalOutcome,
-      gradable: session.model.tiers[s.letter] === 1,
+      gradable: true,
+      strictTier: session.model.tiers[s.letter] ?? null,
     };
     if (session.results.length === 0) {
       row.study = { ...sessionRecord(), modelSha256: session.modelSha, plannedTrials: session.plan.length };
@@ -243,7 +260,7 @@ export default {
       letters: session.letters.join(""), reps: session.reps, planned: session.plan.length,
       pre: n((s) => s.kind === "pre"), teach: n((s) => s.kind === "teach"), post: n((s) => s.kind === "post"),
       recorded: n((s) => s.finalOutcome === "recorded"),
-      quizAccepted: n((s) => (s.kind === "pre" || s.kind === "post") && s.outcome === "accept"),
+      quizAccepted: n((s) => (s.kind === "pre" || s.kind === "post") && s.correct === true),
       taught: n((s) => s.kind === "teach" && s.finalOutcome === "intro-done"),
     };
   },
@@ -257,14 +274,15 @@ export default {
       if (!s.letter || !s.gradable) continue;
       const r = by[s.letter] ??= { pre: [], post: [], teach: 0, taught: 0 };
       if (s.kind === "teach") { r.teach++; if (s.finalOutcome === "intro-done" && s.firstAttemptCorrect) r.taught++; }
-      else if (s.kind === "pre" || s.kind === "post") r[s.kind].push(s.outcome === "accept");
+      else if (s.kind === "pre" || s.kind === "post") r[s.kind].push(s.correct === true);
     }
     const letters = Object.keys(by).sort();
     if (!letters.length) return `<p class="subtle">No graded letters in this session.</p>`;
     const pct = (a) => (a.length ? `${Math.round(100 * a.filter(Boolean).length / a.length)}%` : "—");
     const all = (k) => pct(letters.flatMap((l) => by[l][k]));
-    return `<p>Letters the model grades, before and after the learning part
-        (the model's verdict, which was never shown during the checks):</p>
+    return `<p>Your letters before and after the learning part (the model's
+        verdict, never shown during the checks; a letter made with the other
+        hand counts as not right):</p>
       <p><strong>Before: ${all("pre")} &nbsp; After: ${all("post")}</strong></p>
       <table class="results"><tr><th>letter</th><th>before</th><th>after</th></tr>
       ${letters.map((l) => `<tr><th>${l}</th><td>${pct(by[l].pre)}</td><td>${pct(by[l].post)}</td></tr>`).join("")}
@@ -283,7 +301,7 @@ async function loadEverything() {
     throw new Error(`Could not load the grading model from ${MODEL_PATH} (${err?.message || err}).`);
   }
   session.model = loadModel(JSON.parse(text));
-  session.engine = createEngine({ model: session.model, letters: session.letters, hintPolicy });
+  session.engine = createEngine({ model: session.model, letters: session.letters, hintPolicy, gradeAll: true, hand: session.hand });
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   session.modelSha = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -292,7 +310,7 @@ function sessionRecord() {
   return {
     studyVersion: STUDY_VERSION, tutorVersion: TUTOR_VERSION, hintPolicy,
     letters: session.letters.join(""), reps: session.reps, seed: session.seed, seedSource: session.seedSource,
-    plannedTrials: session.plan.length, commitOptions: TUTOR_COMMIT_OPTS, debug: debugOn,
+    plannedTrials: session.plan.length, commitOptions: TUTOR_COMMIT_OPTS, debug: debugOn, hand: session.hand,
   };
 }
 

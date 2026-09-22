@@ -27,6 +27,14 @@ import { featuresFromFlat } from "../../tutor/features.js";
 import { createCommitter, shapeDistance, DEFAULTS as COMMIT_DEFAULTS } from "../../tutor/commit.js";
 import { verify, standardize, scoreAll } from "../../tutor/verifier.js";
 import { createFlow } from "./flow.js";
+import { MOTION_LETTERS, motionVerdict, WINDOW_MS } from "../../tutor/motion.js";
+
+/* Which hand made a hold. The geometry (tutor/hand-frame.js chirality) is
+ * trusted when it is clear; when it is not, MediaPipe's own label, by majority
+ * over the recent frames. On this platform's unmirrored frames a physical
+ * RIGHT hand reads as +1 and "Right" (research/live/REPORT.md section 1). */
+export const HAND_MARGIN = 0.15;
+const HAND_SIGN = { right: 1, left: -1 };
 
 /* The hold-still ring, as this tutor runs it. The module's own defaults are
  * what its statistical tests characterize; these are what real hands needed.
@@ -172,8 +180,9 @@ export function inspectFrame(model, { flat, aspect, videoHeight }, target) {
  * @param {object} [o.commitOpts]
  * @param {object} [o.deps]      passed to createFlow (tests stub the verifier)
  */
-export function createEngine({ model, letters, hintPolicy = "strict", commitOpts = TUTOR_COMMIT_OPTS, deps = {} }) {
+export function createEngine({ model, letters, hintPolicy = "strict", commitOpts = TUTOR_COMMIT_OPTS, deps = {}, gradeAll = false, hand = null }) {
   const committer = createCommitter(commitOpts);
+  let recent = [];       // { tMs, flat, label } for the motion letters and the hand vote
   let flow = null;
   let lastGraded = null;   // the points of the last pose graded in THIS trial
   let queued = [];     // effects waiting for the trial's first frame
@@ -213,7 +222,8 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
      * (tutor/commit.js nextTrial has the story). */
     startTrial(trial) {
       committer.nextTrial();
-      flow = createFlow({ model, letters, hintPolicy, deps });
+      flow = createFlow({ model, letters, hintPolicy, deps, gradeAll, handName: hand });
+      recent = [];
       pending = [];
       lastGraded = null;
       queued = flow.startTrial(trial);
@@ -228,9 +238,11 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
      * @param {number} f.videoHeight          pixels
      * @returns {{progress:number, effects:object[], committed:boolean, sign:number|null}}
      */
-    frame({ tMs, flat, aspect, videoHeight }) {
+    frame({ tMs, flat, aspect, videoHeight, handedness = null }) {
       if (flow === null) throw new Error("engine.frame: no trial has been started");
       const effects = [];
+      recent.push({ tMs, flat, label: handedness });
+      while (recent.length && recent[0].tMs < tMs - WINDOW_MS - 2000) recent.shift();
       if (queued.length) { route(queued, tMs, effects); queued = []; }
 
       const { progress, committed } = committer.push(tMs, flat, aspect);
@@ -242,6 +254,19 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
         const points = toPoints(committed.flat, aspect);
         const c = chirality(points);
         sign = c.sign;
+        let wrongHand = false;
+        if (hand !== null) {
+          const want = HAND_SIGN[hand];
+          let madeWith = Math.abs(c.margin) >= HAND_MARGIN ? c.sign : null;
+          if (madeWith === null) {
+            const votes = recent.filter((r) => r.tMs >= committed.tStart && r.label).map((r) => (/^r/i.test(r.label) ? 1 : -1));
+            if (votes.length) madeWith = votes.reduce((a, b) => a + b, 0) >= 0 ? 1 : -1;
+          }
+          wrongHand = madeWith !== null && madeWith !== want;
+          // The asked-for hand is KNOWN, so a right hand whose geometry was
+          // misread (sideways letters) is still graded as a right hand.
+          if (!wrongHand) sign = want;
+        }
         const x = featuresFromFlat(committed.flat, aspect, sign);
         const quality = {
           handPresentFrac: committed.handPresentFrac,
@@ -254,7 +279,11 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
         };
         const samePose = lastGraded !== null && shapeDistance(lastGraded, points) <= SAME_POSE_TOL;
         if (!samePose) lastGraded = points;
-        route(flow.onCommit({ committed, x, quality, sign, samePose }), tMs, effects);
+        const letter = flow.state?.letter;
+        const motion = MOTION_LETTERS.includes(letter)
+          ? motionVerdict(letter, recent.filter((r) => r.tMs >= committed.tStart - WINDOW_MS && r.tMs <= committed.tCommit), aspect)
+          : null;
+        route(flow.onCommit({ committed, x, quality, sign, samePose, motion, wrongHand }), tMs, effects);
       }
 
       flush(tMs, effects);

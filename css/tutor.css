@@ -311,3 +311,6 @@
 .tutor-debug-head { display: flex; gap: 0.8rem; align-items: center; margin-bottom: 0.4rem; }
 .tutor-debug button { font: inherit; font-weight: 700; padding: 0.25rem 0.7rem; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); cursor: pointer; }
 .tutor-debug pre { margin: 0; white-space: pre-wrap; font: 0.76rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+
+/* tutor/letters.js pictureMirrored: shown as it looks on the learner's own mirrored screen. */
+.tutor-picture-flip { transform: scaleX(-1); }

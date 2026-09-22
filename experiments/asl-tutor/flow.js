@@ -29,6 +29,7 @@
 
 import { verify as realVerify, standardize as realStandardize } from "../../tutor/verifier.js";
 import { chooseCorrection as realChooseCorrection } from "../../tutor/blame.js";
+import { MOTION_LETTERS, MOTION_HINTS } from "../../tutor/motion.js";
 import { letterSpec as realLetterSpec, hintFor as realHintFor, pictureUrl as realPictureUrl } from "../../tutor/letters.js";
 
 /* Stamped on every session so a log can say which tutor produced it. Bump it
@@ -164,7 +165,10 @@ function logNumber(v) {
  *                                letterSpec / hintFor / pictureUrl overrides
  * @returns a flow: startTrial, onCommit, onStatus, finishTrial, summary, state
  */
-export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts = MAX_ATTEMPTS, deps = {} }) {
+/* gradeAll: grade every letter the model has, tier-blind (the study). handName:
+ * the hand the learner was asked to use ("right" / "left"), or null for
+ * "either" -- then a hold with the other hand is never counted as correct. */
+export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts = MAX_ATTEMPTS, deps = {}, gradeAll = false, handName = null }) {
   if (!model) throw new Error("createFlow: a loaded model is required");
   if (hintPolicy !== "strict" && hintPolicy !== "lenient") {
     throw new Error(`createFlow: hintPolicy must be "strict" or "lenient", got ${JSON.stringify(hintPolicy)}`);
@@ -197,7 +201,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
   // A letter the model has a class for. Tests stub the model with a tier
   // table alone, so the tiers are the fallback.
   const inModel = (letter) => (model.letters ? model.letters.includes(letter) : letter in model.tiers);
-  const gradable = (letter) => inModel(letter) && model.tiers[letter] === 1;
+  const gradable = (letter) => (inModel(letter) && (gradeAll || model.tiers[letter] === 1)) || MOTION_LETTERS.includes(letter);
 
   function startTrial(trial) {
     t = {
@@ -215,6 +219,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       ended: false,
       endReason: null,
       reported: false,
+      wrongHand: false,     // the LAST hold of this trial was made with the other hand
       statusText: null,
       statusAt: null,
     };
@@ -249,7 +254,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
    * @param {boolean} [o.samePose] the engine's word that this is the pose it
    *                               graded last time in this trial
    */
-  function onCommit({ committed, x, quality, sign = null, samePose = false }) {
+  function onCommit({ committed, x, quality, sign = null, samePose = false, motion = null, wrongHand = false }) {
     if (t === null) throw new Error("flow.onCommit: no trial has been started");
     if (t.ended) return [];   // the runner has one more frame in flight; ignore it
     t.commits++;
@@ -261,9 +266,12 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
     // keep. `graded: false` on the row says the tutor acted on none of it.
     // A letter the model has no class for (J, Z) gets a null verdict, not a
     // crash: the hold is still the data.
-    const v = inModel(t.letter)
-      ? verify(model, x, t.letter, quality, graded ? undefined : { ignoreTier: true })
-      : { outcome: null, reason: "not-in-model", score: NaN, d2: NaN, gate: NaN, rival: null, tier: null };
+    // J and Z are movements: tutor/motion.js grades the frames before the hold.
+    const v = MOTION_LETTERS.includes(t.letter) && motion
+      ? { outcome: motion.ok ? "accept" : "reject", reason: motion.ok ? null : `motion-${motion.reason}`, score: NaN, d2: NaN, gate: NaN, rival: null, tier: null }
+      : inModel(t.letter)
+        ? verify(model, x, t.letter, quality, graded ? undefined : { ignoreTier: true })
+        : { outcome: null, reason: "not-in-model", score: NaN, d2: NaN, gate: NaN, rival: null, tier: null };
 
     const base = {
       trialId: t.trial.id,
@@ -311,12 +319,27 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       repeat: false,
     };
 
-    if (isQuiz(t.kind) || (t.kind === "teach" && !gradable(t.letter))) {
+    base.motion = motion ? motion.stats ?? null : null;
+    base.wrongHand = !!(handName && wrongHand);
+    t.wrongHand = base.wrongHand;
+    if (isQuiz(t.kind)) {
       // Recorded and done. `consumed` stays false: nothing was charged to the
-      // learner, and the analysis reads `outcome` (null for J and Z).
+      // learner. The analysis reads `outcome` AND `wrongHand`: a hold with the
+      // other hand is never a correct answer, whatever the model said.
       t.lastOutcome = v.outcome;
       return [log("attempt", base), say("Recorded.", "done"), ...end("recorded")];
     }
+    if (base.wrongHand && isIntroLike(t.kind)) {
+      // Not a handshape mistake, so no attempt is charged; the learner is told
+      // plainly which hand to use and gets time to switch.
+      base.attempt = t.attempts;
+      return [log("attempt", base), say(`Use your ${handName} hand.`, "correction"), holdOff(HOLD_OFF_MS.correction)];
+    }
+    if (t.kind === "teach" && !gradable(t.letter)) {
+      t.lastOutcome = v.outcome;
+      return [log("attempt", base), { kind: "reward", points: 0 }, say("Good job!", "correct"), ...end("recorded")];
+    }
+    if (isIntroLike(t.kind) && MOTION_LETTERS.includes(t.letter)) return onMotionCommit(base, v, motion);
     if (!graded) return onIntroCommit(base, v, x, samePose);
     if (samePose === true && (t.lastOutcome === "reject" || t.lastOutcome === "abstain")) {
       base.repeat = true;
@@ -332,6 +355,22 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
   }
 
   /* One held hand on an intro (see INTRO_MAX_MISSES for the why). */
+  /* J or Z during teaching: the movement was right, or it gets the one line
+   * that says how to draw it. Same safety valve as any intro. */
+  function onMotionCommit(base, v, motion) {
+    t.lastOutcome = v.outcome;
+    t.attempts++;
+    base.attempt = t.attempts;
+    if (v.outcome === "accept") {
+      return [log("attempt", base), { kind: "reward", points: 0 }, say(`Good job — that is ${t.letter}!`, "correct"), ...end("intro-done")];
+    }
+    const hint = MOTION_HINTS[t.letter][motion?.reason === "shape" ? "shape" : "motion"];
+    const effects = [log("attempt", base), say(hint, "correction")];
+    if (t.attempts >= INTRO_MAX_MISSES) effects.push(say("Good try — let's move on.", "done"), ...end("intro-done"));
+    else effects.push(holdOff(HOLD_OFF_MS.correction));
+    return effects;
+  }
+
   function onIntroCommit(base, v, x, samePose) {
     const missedBefore = t.lastOutcome === "reject" || t.lastOutcome === "abstain";
     if (samePose === true && missedBefore && v.outcome !== "accept") {
@@ -348,7 +387,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       return [
         log("attempt", base),
         { kind: "reward", points: 0 },   // the glow, not a point: this was not a test
-        say(`Yes — that is ${t.letter}. It will come back as a test.`, "correct"),
+        say(t.kind === "teach" ? `Good job — that is ${t.letter}!` : `Yes — that is ${t.letter}. It will come back as a test.`, "correct"),
         ...end("intro-done"),
       ];
     }
@@ -663,6 +702,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       assisted: t.assisted,
       ungraded,
       finalOutcome: t.endReason,
+      wrongHand: t.wrongHand,
     };
   }
 

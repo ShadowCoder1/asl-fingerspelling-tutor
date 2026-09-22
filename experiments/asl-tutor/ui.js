@@ -23,7 +23,7 @@
  * colorblind readers; the reward flash is a brief additive glow, never a
  * flashing element. */
 
-import { LETTERS, PICTURE_CAPTION } from "../../tutor/letters.js";
+import { LETTERS, PICTURE_CAPTION, pictureMirrored } from "../../tutor/letters.js";
 
 /* The note that has to be on screen the whole time, not behind a link. This
  * tutor grades with a model fitted on posed photographs from public datasets;
@@ -51,7 +51,7 @@ const MASTERY_STATES = {
  * camera, the letter with its ring, the picture -- no points, no letter map,
  * no standing notes (they are on the instructions page instead). Every id the
  * code looks up still exists, so nothing below has to know which layout it is. */
-export function mountTutor(el, { letters, hintPolicy, layout = "tutor" }) {
+export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "right" }) {
   /* Two groups, so the stylesheet can put them where it likes: the PANEL (the
    * letter, what the tutor says, the reference picture) sits beside the camera
    * on a wide screen; the FOOT (points, the letter map, the standing notes)
@@ -154,6 +154,7 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor" }) {
     if (hasPicture) {
       nodes.picture.src = pictureUrl;
       nodes.picture.alt = `The handshape for the letter ${letter}.`;
+      nodes.picture.classList.toggle("tutor-picture-flip", pictureMirrored(letter, hand));
     }
     nodes.describe.textContent = describe ?? "";
     nodes.describe.hidden = !describe;
