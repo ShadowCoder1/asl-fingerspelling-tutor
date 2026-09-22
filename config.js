@@ -46,9 +46,9 @@ export const ACTIVE_EXPERIMENT = "asl-study";
  * ---------------------------------------------------------------------------*/
 export const STUDY = {
   // Shown on the welcome screen.
-  title: "Hand Movement Study",
-  labName: "Your Lab Name",
-  contactEmail: "you@university.edu",
+  title: "Learning the fingerspelling alphabet",
+  labName: "",   // blank hides the line; fill in the lab's name before recruiting
+  contactEmail: "sritej.paddy@gmail.com",
 
   // Shown above the consent form as a short lead-in.
   consentIntroHtml: `

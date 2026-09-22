@@ -117,6 +117,7 @@ async function run(exp) {
    * ticked, and which ones were agreed to is stored with the session. */
   ui.setText("#study-title", STUDY.title);
   ui.setText("#study-lab", STUDY.labName);
+  if (!STUDY.labName) ui.$("#study-lab").hidden = true;
   ui.setHtml("#consent-intro", STUDY.consentIntroHtml ?? "");
   ui.setText("#experiment-title", exp.title);
 
