@@ -242,6 +242,7 @@ export default {
       letter: s.letter, kind: s.kind, attempts: s.attempts, outcome: s.outcome ?? null, wrongHand: !!s.wrongHand,
       // THE study measure: the model accepted it AND it was made with the asked-for hand.
       correct: s.outcome === "accept" && !s.wrongHand,
+      firstHoldRight: s.firstHoldRight,
       firstAttemptCorrect: s.firstAttemptCorrect, assisted: s.assisted, finalOutcome: s.finalOutcome,
       gradable: true,
       strictTier: session.model.tiers[s.letter] ?? null,

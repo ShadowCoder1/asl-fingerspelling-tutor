@@ -13,7 +13,7 @@
  * disappearing. */
 
 import { STUDY, CONSENT, SCREENS, RECORDING, ACTIVE_EXPERIMENT } from "../../config.js";
-import { DEMOGRAPHIC_QUESTIONS } from "../../questions.js";
+import { DEMOGRAPHIC_QUESTIONS, POST_QUESTIONS } from "../../questions.js";
 import { renderForm, readForm, focusField } from "./form.js";
 import { startCamera, stopCamera } from "./camera.js";
 import { createTracker } from "./tracker.js";
@@ -463,6 +463,24 @@ async function run(exp) {
     });
   }
 
+  /* ---- 6b. Questions after the task -------------------------------------
+   * questions.js POST_QUESTIONS, before the results page (so the answers are
+   * not coloured by a score). Written into the session document. This screen
+   * was specified on 2026-09-21 but the wiring never landed; the first
+   * finished session (2026-09-23) went straight to "thank you". */
+  let postQuestionnaire = {};
+  if (SCREENS?.postQuestions !== false && POST_QUESTIONS?.length) {
+    const formEl = ui.$("#post-form");
+    renderForm(formEl, POST_QUESTIONS, {});
+    ui.showScreen("screen-post");
+    while (true) {
+      await ui.waitForClick("#btn-post");
+      const { ok, values, firstError } = readForm(formEl, POST_QUESTIONS);
+      if (ok) { postQuestionnaire = values; break; }
+      focusField(formEl, firstError);
+    }
+  }
+
   /* ---- 7. Session summary ----------------------------------------------- */
   if (saving) {
     ui.showScreen("screen-saving");
@@ -479,6 +497,7 @@ async function run(exp) {
     startedAt,
     consent: consentRecord,
     demographics,
+    postQuestionnaire,
     trials: trialSummaries,
     // How trials were chosen: "list" for a fixed array (or a function that
     // built one), "nextTrial" for an experiment that decided each trial as it

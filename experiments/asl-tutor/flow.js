@@ -220,6 +220,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       endReason: null,
       reported: false,
       wrongHand: false,     // the LAST hold of this trial was made with the other hand
+      firstHoldRight: null, // the FIRST hold: accepted, with the asked-for hand (any kind of trial)
       statusText: null,
       statusAt: null,
     };
@@ -322,6 +323,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
     base.motion = motion ? motion.stats ?? null : null;
     base.wrongHand = !!(handName && wrongHand);
     t.wrongHand = base.wrongHand;
+    if (t.firstHoldRight === null) t.firstHoldRight = v.outcome === "accept" && !base.wrongHand;
     if (isQuiz(t.kind)) {
       // Recorded and done. `consumed` stays false: nothing was charged to the
       // learner. The analysis reads `outcome` AND `wrongHand`: a hold with the
@@ -703,6 +705,9 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       ungraded,
       finalOutcome: t.endReason,
       wrongHand: t.wrongHand,
+      // firstAttemptCorrect is the adaptive schedule's, and stays null on
+      // intros and teaching trials; this one is set on every kind of trial.
+      firstHoldRight: t.firstHoldRight,
     };
   }
 
