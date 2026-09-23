@@ -602,6 +602,9 @@ function applyEffects(effects, { trial, addEvent, endTrial }) {
       case "reward":
         view.reward(e.points);
         break;
+      case "complete":
+        view.complete();
+        break;
       case "log":
         addEvent(e.event, e.data);
         if (e.event === "attempt") debug?.attempt(e.data);

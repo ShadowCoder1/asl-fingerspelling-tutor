@@ -314,3 +314,165 @@
 
 /* tutor/letters.js pictureMirrored: shown as it looks on the learner's own mirrored screen. */
 .tutor-picture-flip { transform: scaleX(-1); }
+
+/* ---- the burst: a hold was taken ----------------------------------------- */
+/* A wave off the ring and twelve sparks flying out along their own angles.
+   Green for a right answer in teaching, the ring's orange on a test (where it
+   says only that the hold was taken). ui.js SPARKS / burst(). */
+.tutor-cue-wrap { --ring: 168px; }
+.tutor-burst { position: absolute; inset: 0; pointer-events: none; --burst: var(--accent); }
+.tutor-burst-good { --burst: var(--good); }
+.tutor-burst-wave {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 5px solid var(--burst); opacity: 0;
+}
+.tutor-burst i {
+  position: absolute; left: 50%; top: 50%;
+  width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px;
+  border-radius: 50%; background: var(--burst); opacity: 0;
+}
+.tutor-burst-go .tutor-burst-wave { animation: tutor-wave 650ms cubic-bezier(.15, .7, .3, 1) 1; }
+.tutor-burst-go i { animation: tutor-spark 720ms cubic-bezier(.12, .75, .3, 1) 1; }
+@keyframes tutor-wave {
+  0%   { opacity: .85; transform: scale(.92); }
+  100% { opacity: 0;   transform: scale(1.5); }
+}
+@keyframes tutor-spark {
+  0%   { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--ring) * -0.5)) scale(.6); }
+  15%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--ring) * -0.47 - var(--ring) * 0.36 * var(--d))) scale(.35); }
+}
+/* the letter gives a small pop, and takes the burst's color for a moment */
+.tutor-burst-good .tutor-cue, .tutor-burst-done .tutor-cue { animation: tutor-cue-pop 420ms cubic-bezier(.2, .9, .3, 1.4) 1; }
+.tutor-burst-done .tutor-cue { color: var(--accent-ink); }
+.tutor-burst-good .tutor-cue { color: var(--good); }
+@keyframes tutor-cue-pop { 0% { transform: scale(1); } 40% { transform: scale(1.14); } 100% { transform: scale(1); } }
+
+/* the ring stays bright while it bursts, even though the trial is now paused */
+.tutor-burst-good .tutor-ring, .tutor-burst-done .tutor-ring { opacity: 1; }
+.tutor-burst-good .tutor-ring-fill { stroke: var(--good); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tutor-burst-go .tutor-burst-wave, .tutor-burst-go i,
+  .tutor-burst-good .tutor-cue, .tutor-burst-done .tutor-cue { animation: none; }
+}
+
+/* ---- the study's screen (JT, 2026-09-23) --------------------------------- */
+/* The camera is the whole left side. The right side is exactly as tall as the
+   camera and split in two equal halves: the letter and its ring on top, the
+   picture of the sign underneath (empty during a test). */
+.tutor-picture-slot { display: contents; }
+
+@media (min-width: 900px) {
+  main:has(#screen-trial.visible .tutor-layout-study) { max-width: 1200px; }
+  #screen-trial.visible:has(.tutor-layout-study) {
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    grid-template-areas:
+      "progress progress"
+      "stage    panel";
+    align-items: stretch;
+    gap: 16px 22px;
+  }
+  /* contain: size keeps the panel from making the row taller than the camera:
+     it takes the camera's height and splits it, whatever is inside. */
+  #screen-trial:has(.tutor-layout-study) .tutor-panel {
+    contain: size;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .tutor-layout-study .tutor-main {
+    container-type: size;
+    min-height: 0;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.8rem 1rem;
+  }
+  .tutor-layout-study .tutor-label { font-size: 0.72rem; }
+  /* the ring is as big as the half allows, leaving room for one line of words */
+  .tutor-layout-study .tutor-cue-wrap {
+    --ring: clamp(84px, min(100cqh - 5.2rem, 70cqw), 230px);
+    width: var(--ring);
+    height: var(--ring);
+  }
+  .tutor-layout-study .tutor-ring { width: 100%; height: 100%; }
+  .tutor-layout-study .tutor-cue { font-size: calc(var(--ring) * 0.46); }
+  /* room for two lines, so the longest hint never pushes the ring out */
+  .tutor-layout-study .tutor-said { min-height: 0; height: 3rem; justify-content: center; }
+  .tutor-layout-study .tutor-feedback { font-size: 0.95rem; line-height: 1.25; padding: 0.3rem 0.8rem; }
+
+  .tutor-layout-study .tutor-picture-slot {
+    display: flex;
+    min-height: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  /* no picture on a test: the half stays, quietly empty */
+  .tutor-layout-study .tutor-picture-slot:has(.tutor-reference[hidden]) {
+    background: var(--soft);
+    box-shadow: none;
+  }
+  /* the drawing at the full height of its half, the words beside it */
+  .tutor-layout-study .tutor-reference {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    padding: 0.9rem 1.1rem;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
+    grid-template-rows: 1fr auto auto auto 1fr;
+    grid-template-areas: "pic ." "pic describe" "pic mnemonic" "pic caption" "pic .";
+    column-gap: 1.1rem;
+    row-gap: 0.35rem;
+    align-items: center;
+    text-align: left;
+  }
+  .tutor-layout-study .tutor-picture {
+    grid-area: pic;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    object-fit: contain;
+    padding: 10px;
+  }
+  .tutor-layout-study .tutor-picture-slot { container-type: size; }
+  .tutor-layout-study .tutor-describe { grid-area: describe; text-align: left; }
+  .tutor-layout-study .tutor-mnemonic { grid-area: mnemonic; text-align: left; }
+  .tutor-layout-study .tutor-caption { grid-area: caption; }
+  /* the words shrink with the half they are in, and on a small screen the
+     least needed go first: the caption, then the mnemonic */
+  .tutor-layout-study .tutor-describe { font-size: clamp(0.8rem, 7cqh, 1rem); line-height: 1.3; }
+  .tutor-layout-study .tutor-mnemonic { font-size: clamp(0.78rem, 6.5cqh, 0.95rem); line-height: 1.3; }
+  @container (max-height: 225px) { .tutor-layout-study .tutor-caption { display: none; } }
+  @container (max-height: 205px) { .tutor-layout-study .tutor-mnemonic { display: none; } }
+}
+
+/* one line of words under the ring: what the tutor said, or failing that the
+   standing instruction */
+.tutor-layout-study .tutor-feedback:not(:empty) + .tutor-status { display: none; }
+
+/* ---- the demo films on the instruction and break screens ----------------- */
+.study-demo { margin: 1rem 0; position: relative; }
+.study-demo-sound {
+  position: absolute; right: 10px; top: 10px;
+  font: inherit; font-size: .78rem; font-weight: 700;
+  padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .88); color: var(--text); cursor: pointer;
+}
+.study-demo video {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  aspect-ratio: 16 / 9;
+}

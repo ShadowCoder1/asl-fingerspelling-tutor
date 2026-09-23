@@ -329,7 +329,9 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       // learner. The analysis reads `outcome` AND `wrongHand`: a hold with the
       // other hand is never a correct answer, whatever the model said.
       t.lastOutcome = v.outcome;
-      return [log("attempt", base), say("Recorded.", "done"), ...end("recorded")];
+      // `complete` is the ring's burst: the hold was taken. It is the same
+      // for a right and a wrong hand, so it says nothing about correctness.
+      return [log("attempt", base), { kind: "complete" }, say("Recorded.", "done"), ...end("recorded")];
     }
     if (base.wrongHand && isIntroLike(t.kind)) {
       // Not a handshape mistake, so no attempt is charged; the learner is told

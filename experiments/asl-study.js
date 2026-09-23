@@ -1,14 +1,15 @@
 /* asl-study.js: JT's fixed three-part study (2026-09-21), as one task.
  *
- *   1. BASELINE   every letter twice, letter only, no picture: the first hold
+ *   1. BASELINE   every letter once, letter only, no picture: the first hold
  *                 is recorded and the trial ends. The learner is told only
- *                 that it was recorded -- the ring is the one piece of
- *                 feedback (hold time), never right/wrong.   26 x 2 = 52
- *   2. TEACHING   every letter ten times, letter WITH its picture. Where the
- *                 model grades the letter, a right hold ends the trial and a
- *                 wrong one gets the hint; where it does not (tier 2, J, Z),
- *                 the first hold is recorded and it moves on.  26 x 10 = 260
- *   3. POST-TEST  as the baseline.                                 26 x 2 = 52
+ *                 that it was recorded -- the ring and its (orange) burst
+ *                 say the hold was taken, never right/wrong.       5 x 1 = 5
+ *   2. TEACHING   every letter ten times, letter WITH its picture. A right
+ *                 hold ends the trial (green burst, "Good job"); a wrong one
+ *                 gets the hint.                                  5 x 10 = 50
+ *   3. POST-TEST  as the baseline.                                5 x 1 = 5
+ *
+ * Five letters by default (DEMO_LETTERS, JT 2026-09-23); ?letters= for more.
  *
  * Every part is made of shuffled passes through the alphabet (a pass = each
  * letter once), seeded from the participant id, so no letter is seen twice
@@ -32,12 +33,19 @@ import { createEngine, TUTOR_COMMIT_OPTS } from "./asl-tutor/engine.js";
 import { createDebug } from "./asl-tutor/debug.js";
 import { mountTutor } from "./asl-tutor/ui.js";
 import { drawLandmarks } from "../js/core/experiment.js";
+import { createHandPicker } from "../tutor/pick-hand.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 
 const MODEL_PATH = "tutor/model.json";
 export const STUDY_VERSION = "asl-study/2";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
+/* JT, 2026-09-23: five letters, for a short demo. The five the grader is surest
+ * of on data it never saw (research/allletters-2026-09-22, per_letter.py:
+ * correct hands accepted 0.93-0.99, look-alikes 0.00-0.03), none a movement,
+ * none a look-alike of another, and each one a letter the owner's pilot went
+ * from wrong to right on. The whole alphabet is ?letters=ABCDEFGHIJKLMNOPQRSTUVWXYZ. */
+export const DEMO_LETTERS = Object.freeze(["B", "D", "F", "I", "V"]);
 
 /* Which hand to sign with, from the questionnaire's dominantHand. Everyone is
  * asked to use ONE hand; "Left" means the left, anything else the right (the
@@ -52,22 +60,32 @@ const PHASES = ["pre", "teach", "post"];
 const QUIZ_DURATION_SEC = 20;
 const TEACH_DURATION_SEC = 40;
 
-/* The break screens between parts. Written for someone who has never seen
- * the page; the runner shows them on its rest screen (js/core/experiment.js). */
+/* A short looping film of a few trials, shown before a part starts (JT,
+ * 2026-09-23). Made by tools/demo-video/, from real recorded hands. Browsers
+ * only autoplay a muted video, so its music is behind a button. */
+export const demoVideo = (src, label) => `
+  <figure class="study-demo">
+    <video src="${src}" autoplay loop muted playsinline preload="auto" aria-label="${label}"></video>
+    <button type="button" class="study-demo-sound"
+      onclick="const v=this.previousElementSibling; v.muted=!v.muted; this.textContent=v.muted?'Sound on':'Sound off'">Sound on</button>
+  </figure>`;
+export const TEST_DEMO = "assets/demo/test-demo.mp4";
+export const TEACH_DEMO = "assets/demo/teach-demo.mp4";
+
+/* The break screens between parts. As short as JT asked for; the film shows
+ * the rest. The runner shows them on its rest screen (js/core/experiment.js). */
 export const BREAKS = Object.freeze({
   teach: {
-    restHeading: "Part 2 of 3: learning the letters",
-    restHtml: `<p>Now each letter comes with a picture of the handshape. Copy the
-      picture and hold the shape still. If it is not quite right, you will be
-      told one thing to change. Each letter comes round ten times.</p>`,
-    restButton: "Start part 2",
+    restHeading: "Now we will teach you the signs",
+    restHtml: `<p>Copy the picture, then hold your hand still until the circle fills.</p>
+      ${demoVideo(TEACH_DEMO, "A short film of someone copying three signs")}`,
+    restButton: "Start",
   },
   post: {
-    restHeading: "Part 3 of 3: the letters again",
-    restHtml: `<p>The pictures are gone again. For each letter, make the
-      handshape from memory and hold it still. As in part 1, you will not be
-      told whether it was right.</p>`,
-    restButton: "Start part 3",
+    restHeading: "Now show us the signs again",
+    restHtml: `<p>Like the first part: no pictures, so sign each letter from memory.</p>
+      ${demoVideo(TEST_DEMO, "A short film of someone signing three letters")}`,
+    restButton: "Start",
   },
 });
 
@@ -96,7 +114,7 @@ export function parseReps(raw) {
 }
 
 export function parseStudyLetters(raw) {
-  if (raw === null) return LETTERS.slice();
+  if (raw === null) return DEMO_LETTERS.slice();
   const letters = raw.toUpperCase().split("");
   const bad = letters.filter((l) => !LETTERS.includes(l));
   if (bad.length || !letters.length) throw new Error(`?letters=${raw} contains ${bad.join(", ") || "nothing"}, which are not letters. Use A-Z.`);
@@ -116,7 +134,7 @@ function plannedTrials() {
     const r = parseReps(params.get("reps"));
     return parseStudyLetters(params.get("letters")).length * (r.pre + r.teach + r.post);
   } catch {
-    return LETTERS.length * (DEFAULT_REPS.pre + DEFAULT_REPS.teach + DEFAULT_REPS.post);
+    return DEMO_LETTERS.length * (DEFAULT_REPS.pre + DEFAULT_REPS.teach + DEFAULT_REPS.post);
   }
 }
 
@@ -124,39 +142,35 @@ let view = null;
 let debug = null;
 let session = null;
 let mountError = null;
+let picker = null;
 
 export default {
   id: "asl-study",
   title: "Learning the fingerspelling alphabet",
 
   tracker: "hand",
-  trackerOptions: { numHands: 1 },
+  // Two, so that the other hand coming into view cannot take the tracker away
+  // from the one being used: pickHand below keeps the asked-for hand, and the
+  // other is never graded, drawn or saved (tutor/pick-hand.js).
+  trackerOptions: { numHands: 2 },
+
+  pickHand(res, { aspect, demographics }) {
+    const want = studyHand(demographics);
+    if (picker?.want !== want) picker = Object.assign(createHandPicker(want), { want });
+    return picker(res, aspect);
+  },
 
   maxTrials: plannedTrials(),
 
+  // JT, 2026-09-23: this and a film of a few trials, nothing more.
   instructions: ({ demographics } = {}) => `
-    <p><strong>Use only your ${studyHand(demographics)} hand</strong> for every letter,
-       and keep your other hand out of the picture. A letter made with the other
-       hand does not count.</p>
-    <p>This study has three parts and takes about 20 minutes.</p>
-    <ol>
-      <li><strong>First, a check of what you already know.</strong> A letter
-          appears; make its handshape with one hand and <strong>hold it
-          still</strong> until the ring closes. You will not be told whether
-          it was right.</li>
-      <li><strong>Then, learning.</strong> Each letter comes with a picture to
-          copy, ten times over, and you are told what to change. J and Z are
-          movements: draw the letter in the air, then hold still.</li>
-      <li><strong>Then the check again.</strong></li>
-    </ol>
-    <p>Keep your hand in the picture, a comfortable distance from the camera;
-       it does not have to be perfectly still. The dots on your hand show it is
-       being tracked.</p>
-    <p class="subtle">The grading comes from a model built on public data and
-       can be wrong. This teaches fingerspelling handshapes, not ASL.</p>`,
+    <p>We will first see which signs you already know.</p>
+    <p><strong>Please use your ${studyHand(demographics)} hand.</strong></p>
+    ${demoVideo(TEST_DEMO, "A short film of someone signing three letters")}
+    <p class="subtle">Make the sign, then hold your hand still until the circle fills.</p>`,
 
   mount(el, { participant, demographics }) {
-    let letters = LETTERS.slice(), reps = { ...DEFAULT_REPS };
+    let letters = DEMO_LETTERS.slice(), reps = { ...DEFAULT_REPS };
     try {
       letters = parseStudyLetters(params.get("letters"));
       reps = parseReps(params.get("reps"));
@@ -325,6 +339,7 @@ function applyEffects(effects, { trial, addEvent, endTrial }) {
         break;
       case "status": view.status(e.text); break;
       case "reward": view.reward(e.points); break;
+      case "complete": view.complete(); break;
       case "log": addEvent(e.event, e.data); if (e.event === "attempt") debug?.attempt(e.data); break;
       case "end-trial": endTrial(e.reason); break;
       case "schedule-report": break;   // the study has no adaptive schedule

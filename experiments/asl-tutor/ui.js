@@ -40,6 +40,14 @@ export const NOT_ASL_NOTE =
 const RING_R = 52;
 const RING_C = 2 * Math.PI * RING_R;
 
+/* The burst when a hold is taken: a wave off the ring and twelve sparks, each
+ * sent out along its own angle (--a) by tutor.css. Green on a right answer in
+ * teaching; orange (the ring's own color) on a test, where it means only
+ * "that hold was taken" and is the same whatever the hand was (JT, 2026-09-23). */
+const SPARKS = Array.from({ length: 12 }, (_, i) =>
+  `<i style="--a:${i * 30}deg;--d:${i % 2 ? 0.78 : 1}"></i>`).join("");
+const BURST_MS = 750;
+
 const MASTERY_STATES = {
   untaught: { label: "not yet", className: "tutor-cell" },
   introduced: { label: "shown", className: "tutor-cell tutor-cell-introduced" },
@@ -69,6 +77,7 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
                       stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${RING_C.toFixed(2)}"></circle>
             </svg>
             <div class="tutor-cue" id="tutor-cue" aria-label="sign this letter">—</div>
+            <div class="tutor-burst" aria-hidden="true"><span class="tutor-burst-wave"></span>${SPARKS}</div>
           </div>
           <div class="tutor-said">
             <p class="tutor-feedback" id="tutor-feedback" aria-live="polite" role="status"></p>
@@ -76,12 +85,14 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
           </div>
         </div>
 
-        <figure class="tutor-reference" id="tutor-reference" hidden>
-          <img class="tutor-picture" id="tutor-picture" alt="" hidden>
-          <figcaption class="tutor-caption" id="tutor-caption">${PICTURE_CAPTION}</figcaption>
-          <p class="tutor-describe" id="tutor-describe"></p>
-          <p class="tutor-mnemonic" id="tutor-mnemonic" hidden></p>
-        </figure>
+        <div class="tutor-picture-slot">
+          <figure class="tutor-reference" id="tutor-reference" hidden>
+            <img class="tutor-picture" id="tutor-picture" alt="" hidden>
+            <figcaption class="tutor-caption" id="tutor-caption">${PICTURE_CAPTION}</figcaption>
+            <p class="tutor-describe" id="tutor-describe"></p>
+            <p class="tutor-mnemonic" id="tutor-mnemonic" hidden></p>
+          </figure>
+        </div>
       </div>
 
       <div class="tutor-foot"${layout === "study" ? " hidden" : ""}>
@@ -112,6 +123,7 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
     points: $("tutor-points"),
     map: $("tutor-map"),
     cueWrap: el.querySelector(".tutor-cue-wrap"),
+    burst: el.querySelector(".tutor-burst"),
   };
 
   // The whole alphabet, always: which letters this session does NOT teach is
@@ -131,6 +143,27 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
 
   let points = 0;
   let flashTimer = null;
+  let burstTimer = null;
+  // While the burst plays, the ring stays closed: the engine's progress drops
+  // back to 0 the moment a hold is taken, and a ring that emptied under its
+  // own burst would read as the hold being lost.
+  let fullUntil = 0;
+  const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+  const burst = (tone) => {
+    nodes.burst.className = "tutor-burst";
+    nodes.cueWrap.classList.remove("tutor-burst-good", "tutor-burst-done");
+    void nodes.burst.offsetWidth;   // restart the animation if one is still running
+    nodes.burst.className = `tutor-burst tutor-burst-go tutor-burst-${tone}`;
+    nodes.cueWrap.classList.add(`tutor-burst-${tone}`);
+    nodes.ringFill.setAttribute("stroke-dashoffset", "0");
+    nodes.ringFill.style.opacity = "";
+    fullUntil = now() + BURST_MS;
+    if (burstTimer !== null) clearTimeout(burstTimer);
+    burstTimer = setTimeout(() => {
+      nodes.burst.className = "tutor-burst";
+      nodes.cueWrap.classList.remove("tutor-burst-good", "tutor-burst-done");
+    }, BURST_MS);
+  };
   // The standing instruction for this trial, shown whenever the tutor has
   // nothing more specific to say -- until the trial is decided, after which an
   // empty status line is the right one.
@@ -176,6 +209,7 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
       decided = false;
       nodes.status.textContent = helper;
       setReference({ showPicture, pictureUrl, describe, mnemonic, letter });
+      fullUntil = 0;
       this.progress(0);
     },
 
@@ -185,8 +219,11 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
      * a ring that filled only for correct hands would grade the learner before
      * they had finished declaring their answer. */
     progress(p) {
+      if (now() < fullUntil) return;
       const clipped = Math.max(0, Math.min(1, Number.isFinite(p) ? p : 0));
       nodes.ringFill.setAttribute("stroke-dashoffset", (RING_C * (1 - clipped)).toFixed(2));
+      // an empty ring is empty: a round line cap would otherwise leave a dot at twelve
+      nodes.ringFill.style.opacity = clipped > 0 ? "" : "0";
     },
 
     /* The ring is held shut: the learner is reading, or the trial is decided. */
@@ -215,6 +252,13 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
       nodes.cueWrap.classList.add("tutor-flash");
       if (flashTimer !== null) clearTimeout(flashTimer);
       flashTimer = setTimeout(() => nodes.cueWrap.classList.remove("tutor-flash"), 600);
+      burst("good");
+    },
+
+    /* A test hold was taken: the same burst, in the ring's orange. Nothing
+     * about whether it was right. */
+    complete() {
+      burst("done");
     },
 
     /* letter -> "untaught" | "introduced" | "passed" | "retired". A word as

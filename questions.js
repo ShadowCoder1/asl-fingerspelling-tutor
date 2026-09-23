@@ -56,6 +56,7 @@
 
 export const DEMOGRAPHIC_QUESTIONS = [
 
+  // JT, 2026-09-23: four questions only, for the short demo.
   { id: "age",
     label: "Age",
     type: "number",
@@ -65,96 +66,30 @@ export const DEMOGRAPHIC_QUESTIONS = [
     max: 120 },
 
   { id: "sexAtBirth",
-    label: "Sex assigned at birth",
+    label: "Sex",
     type: "select",
     required: true,
     options: ["Female", "Male", "Intersex", "Prefer not to say"] },
 
-  { id: "dominantHand",
-    label: "Dominant hand",
-    type: "select",
-    required: true,
-    options: ["Right", "Left", "Ambidextrous", "Prefer not to say"] },
-
-  { id: "device",
-    label: "What device are you using?",
-    type: "select",
-    required: true,
-    options: ["Laptop", "Desktop computer", "Tablet", "Phone"] },
-
-  { id: "education",
-    label: "Highest education completed",
-    type: "select",
-    options: ["Less than high school",
-              "High school or equivalent",
-              "Some college",
-              "Bachelor's degree",
-              "Master's degree",
-              "Doctoral or professional degree",
-              "Prefer not to say"] },
-
-  { id: "visionCorrection",
-    label: "Vision correction worn now",
-    type: "select",
-    options: ["None", "Glasses", "Contact lenses", "Prefer not to say"] },
-
-  { id: "exercisePerWeek",
-    label: "Physical exercise per week",
-    type: "select",
-    options: ["None",
-              "Less than 1 hour",
-              "1 to 3 hours",
-              "3 to 5 hours",
-              "More than 5 hours",
-              "Prefer not to say"] },
-
-  { id: "smokingStatus",
-    label: "Smoking status",
-    type: "select",
-    options: ["Never smoked", "Former smoker", "Current smoker", "Prefer not to say"] },
-
-  { id: "ethnicity",
-    label: "Ethnicity",
-    type: "select",
-    options: ["Hispanic or Latino", "Not Hispanic or Latino", "Prefer not to say"] },
-
-  { id: "race",
-    label: "Race",
-    type: "select",
-    options: ["American Indian or Alaska Native",
-              "Asian",
-              "Black or African American",
-              "Native Hawaiian or Other Pacific Islander",
-              "White",
-              "More than one race",
-              "Prefer not to say"] },
-
-  // For the fingerspelling study (experiments/asl-study.js).
-  { id: "knowsAslAlphabet",
-    label: "Do you know the American Sign Language (ASL) fingerspelling alphabet?",
+  { id: "signLanguageYears",
+    label: "How many years have you used any sign language?",
+    help: "Count classes, apps and everyday use. If you have never signed, choose None.",
     type: "radio",
     required: true,
-    options: ["No, not at all",
-              "A few letters",
-              "Most of the letters",
-              "All of it, but slowly",
-              "Yes, fluently"] },
+    options: ["None",
+              "Less than 1 year",
+              "1 to 2 years",
+              "3 to 5 years",
+              "More than 5 years"] },
 
-  { id: "signLanguageExperience",
-    label: "Have you ever studied or used any sign language?",
-    type: "select",
+  // The study asks for this hand by name (experiments/asl-study.js studyHand):
+  // "Left" means the left hand, anything else the right.
+  { id: "dominantHand",
+    label: "Dominant hand",
+    help: "The hand you write with.",
+    type: "radio",
     required: true,
-    options: ["Never",
-              "A little (a class, an app, a few signs)",
-              "Some (a course or regular use for under a year)",
-              "A lot (more than a year)",
-              "I am a native or fluent signer"] },
-
-  { id: "participantId",
-    label: "Name or Prolific ID",
-    type: "text",
-    help: "Used only to link your responses. Leave blank for an anonymous ID.",
-    placeholder: "e.g. 5f3c..." },
+    options: ["Right", "Left"] },
 
 ];
 
@@ -166,7 +101,7 @@ export const DEMOGRAPHIC_QUESTIONS = [
 export const POST_QUESTIONS = [
 
   { id: "confidence",
-    label: "How confident are you that you could fingerspell the whole alphabet now?",
+    label: "How confident are you that you could sign these letters now?",
     type: "radio",
     required: true,
     options: ["Not at all", "A little", "Somewhat", "Quite", "Very"] },
@@ -174,7 +109,7 @@ export const POST_QUESTIONS = [
   { id: "hardestLetters",
     label: "Which letters were hardest? (optional)",
     type: "text",
-    placeholder: "e.g. M N T" },
+    placeholder: "e.g. D F" },
 
   { id: "feedbackHelped",
     label: "In the learning part, did the corrections (what to change) help?",

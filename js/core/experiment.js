@@ -237,7 +237,7 @@ async function run(exp) {
     ui.$("#trial-stage-slot").append(stage);
   } else {
     ui.showScreen("screen-position");
-    await positioningLoop(video, tracker, ctx, canvas, stage);
+    await positioningLoop(video, tracker, ctx, canvas, stage, (res) => handIndex(exp, res, videoInfo, demographics));
   }
 
   /* ---- 5. Instructions -------------------------------------------------- */
@@ -328,7 +328,7 @@ async function run(exp) {
     recorder.reset();
     const endReason = await recordTrial({
       video, videoInfo, tracker, ctx, canvas, exp, trial, state, recorder,
-      waitForFrame,
+      waitForFrame, pick: (res) => handIndex(exp, res, videoInfo, demographics),
     });
 
     const summary = exp.onTrialEnd?.({
@@ -664,7 +664,7 @@ async function collectConsent(statements) {
  * The positioning preview: run the tracker live until the participant has been
  * visible for a couple of continuous seconds, then let them continue.
  * ---------------------------------------------------------------------- */
-async function positioningLoop(video, tracker, ctx, canvas, stage) {
+async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 0) {
   ui.$("#position-stage-slot").append(stage);
 
   let stop = false;
@@ -678,9 +678,10 @@ async function positioningLoop(video, tracker, ctx, canvas, stage) {
     if (video.currentTime !== lastVideoTime) {
       lastVideoTime = video.currentTime;
       const res = tracker.track(video, performance.now());
-      drawLandmarks(ctx, canvas, res.landmarks[0]);
+      const k = pick(res);
+      drawLandmarks(ctx, canvas, k >= 0 ? res.landmarks[k] : null);
 
-      const seen = res.landmarks.length > 0;
+      const seen = k >= 0;
       if (seen && visibleSince === null) visibleSince = performance.now();
       if (!seen) visibleSince = null;
 
@@ -712,7 +713,7 @@ async function positioningLoop(video, tracker, ctx, canvas, stage) {
  * the experiment passed to endTrial().
  * ---------------------------------------------------------------------- */
 async function recordTrial({ video, videoInfo, tracker, ctx, canvas, exp, trial, state, recorder,
-                             waitForFrame = nextFrame }) {
+                             waitForFrame = nextFrame, pick = () => 0 }) {
   const durationMs = (trial.durationSec ?? 15) * 1000;
   let lastVideoTime = -1;
 
@@ -727,13 +728,16 @@ async function recordTrial({ video, videoInfo, tracker, ctx, canvas, exp, trial,
       lastVideoTime = video.currentTime;
       const res = tracker.track(video, performance.now());
 
-      const lm = res.landmarks[0] ?? null;
-      const wl = res.worldLandmarks[0] ?? null;
-      const handedness = res.handedness[0] ?? null;
+      // Which of the hands found is the one to use: the first, unless the
+      // experiment says otherwise (exp.pickHand; see handIndex below).
+      const k = pick(res);
+      const lm = k >= 0 ? res.landmarks[k] ?? null : null;
+      const wl = k >= 0 ? res.worldLandmarks[k] ?? null : null;
+      const handedness = k >= 0 ? res.handedness[k] ?? null : null;
       // ?. so a tracker that reports no scores at all gives null here instead
       // of ending the session mid-trial: a missing confidence number is worth
       // far less than the rest of the recording.
-      const handednessScore = res.handednessScore?.[0] ?? null;
+      const handednessScore = k >= 0 ? res.handednessScore?.[k] ?? null : null;
 
       const derived = exp.onFrame?.({
         landmarks: lm,
@@ -787,6 +791,24 @@ async function recordTrial({ video, videoInfo, tracker, ctx, canvas, exp, trial,
   });
 
   return endReason;
+}
+
+/* Which of the tracked hands an experiment wants, as an index into the
+ * tracker's result, or -1 for none. Without exp.pickHand it is the first hand
+ * found, as it always was. An experiment that tracks two hands but is about
+ * ONE (the ASL study: the dominant hand only) picks it here, and only that
+ * hand is handed to onFrame, drawn and saved. A picker that throws or returns
+ * nonsense falls back to the first hand rather than ending the session. */
+function handIndex(exp, res, videoInfo, demographics) {
+  const n = res.landmarks?.length ?? 0;
+  if (!exp.pickHand || n === 0) return n ? 0 : -1;
+  try {
+    const k = exp.pickHand(res, { aspect: videoInfo.aspect, demographics });
+    return Number.isInteger(k) && k >= -1 && k < n ? k : 0;
+  } catch (err) {
+    console.warn("pickHand failed; using the first hand", err);
+    return 0;
+  }
 }
 
 /* The plain numbers, strings and booleans out of an experiment's own trial
