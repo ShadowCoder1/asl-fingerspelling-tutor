@@ -362,7 +362,15 @@ async function run(exp) {
     if (saving) {
       /* Upload straight away, so someone who quits mid-study still leaves data. */
       const chunks = recorder.toChunks();
-      const meta = { experimentId: exp.id, trialId };
+      // The trial's summary and events ride on its LAST chunk, and the
+      // questionnaire on trial 0's: the session document is written only at
+      // the very end, and the first two pilots (2026-09-22) both stopped
+      // early and kept nothing but landmarks.
+      const meta = {
+        experimentId: exp.id, trialId,
+        trialSummary: trialSummaries[trialSummaries.length - 1],
+        ...(i === 0 ? { early: { participantId: participant.participantId, demographics, consent: consentRecord, startedAt } } : {}),
+      };
 
       if (trial.backgroundUpload) {
         // Start the upload and move on without waiting for it. This is what

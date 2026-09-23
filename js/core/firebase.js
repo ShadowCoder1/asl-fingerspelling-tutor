@@ -142,6 +142,8 @@ export async function uploadTrialChunks(sessionId, trialIndex, chunks, meta, onP
         chunkIndex: i,
         chunkCount: chunks.length,
         frames: chunks[i],
+        ...(i === chunks.length - 1 && meta.trialSummary ? { trialSummary: firestoreSafe(meta.trialSummary) } : {}),
+        ...(i === 0 && meta.early ? { early: firestoreSafe(meta.early) } : {}),
         uploadedAt: serverTimestamp(),
       });
     } catch (err) {
@@ -149,6 +151,12 @@ export async function uploadTrialChunks(sessionId, trialIndex, chunks, meta, onP
     }
     onProgress?.(i + 1, chunks.length);
   }
+}
+
+/* Firestore refuses `undefined`; a JSON round trip drops it (and turns
+ * Infinity/NaN into null), which is what these small records need. */
+function firestoreSafe(v) {
+  return JSON.parse(JSON.stringify(v));
 }
 
 /* Re-throwable copy of an upload error that also says how far the upload got.
