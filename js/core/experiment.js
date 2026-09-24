@@ -123,6 +123,9 @@ async function run(exp) {
   if (!STUDY.labName) ui.$("#study-lab").hidden = true;
   ui.setHtml("#consent-intro", STUDY.consentIntroHtml ?? "");
   ui.setText("#experiment-title", exp.title);
+  // The same words twice, one under the other, is just an echo: show the
+  // experiment's title only when it says something the study title doesn't.
+  if (!exp.title || exp.title.trim() === String(STUDY.title ?? "").trim()) ui.$("#experiment-title").hidden = true;
 
   if (CONSENT.pdf) {
     ui.$("#consent-doc").src = CONSENT.pdf;
