@@ -81,6 +81,24 @@ export function waitForClick(sel) {
   });
 }
 
+/* Wait for a click on `sel`, or the space bar while that button is enabled
+ * (SCREENS.spaceToContinue). Space typed into a text box does nothing. */
+export function waitForContinue(sel, { space = false } = {}) {
+  return new Promise((resolve) => {
+    const el = $(sel);
+    const done = () => { el.removeEventListener("click", done); document.removeEventListener("keydown", onKey); resolve(); };
+    const onKey = (e) => {
+      if (e.code !== "Space" && e.key !== " ") return;
+      if (el.disabled || el.offsetParent === null) return;
+      if (e.target.closest?.("input, textarea, select")) return;
+      e.preventDefault();
+      done();
+    };
+    el.addEventListener("click", done);
+    if (space) document.addEventListener("keydown", onKey);
+  });
+}
+
 /** Offer the collected data as a .json download (used when piloting). */
 export function downloadJson(filename, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });

@@ -27,6 +27,9 @@ import { createReplay, loadReplay, replayPathComplaint, startAutorun, stopAutoru
          markE2eDone, markE2eError } from "./replay.js";
 import * as ui from "./ui.js";
 
+const SPACE = SCREENS?.spaceToContinue === true;
+const SPACE_LABEL = "Press space to continue";
+
 export async function main() {
   const name = requestedExperiment(ACTIVE_EXPERIMENT);
 
@@ -237,15 +240,25 @@ async function run(exp) {
     ui.$("#trial-stage-slot").append(stage);
   } else {
     ui.showScreen("screen-position");
+    // An experiment can word the camera check itself (the study names the
+    // hand to use here, since its instructions page is off).
+    const positionText = exp.positionText?.({ demographics });
+    if (positionText) ui.setText("#position-text", positionText);
+    if (SPACE) ui.setText("#btn-position-done", SPACE_LABEL);
     await positioningLoop(video, tracker, ctx, canvas, stage, (res) => handIndex(exp, res, videoInfo, demographics));
   }
 
   /* ---- 5. Instructions -------------------------------------------------- */
   // May be a function of the questionnaire answers (the study words its
   // instructions around the participant's dominant hand).
-  ui.setHtml("#instructions-text", (typeof exp.instructions === "function" ? exp.instructions({ demographics, participant }) : exp.instructions) ?? "");
-  ui.showScreen("screen-instructions");
-  await ui.waitForClick("#btn-start");
+  // Off in config.js SCREENS.instructions: the task starts straight after the
+  // camera check.
+  if (SCREENS?.instructions !== false) {
+    ui.setHtml("#instructions-text", (typeof exp.instructions === "function" ? exp.instructions({ demographics, participant }) : exp.instructions) ?? "");
+    if (SPACE) ui.setText("#btn-start", SPACE_LABEL);
+    ui.showScreen("screen-instructions");
+    await ui.waitForContinue("#btn-start", { space: SPACE });
+  }
 
   /* ---- 6. Trials -------------------------------------------------------- */
   // A fixed list (finger tapping, the feature probe) or trials chosen one at a
@@ -423,12 +436,12 @@ async function run(exp) {
       // An experiment may use the break to announce its next part.
       ui.setText("#rest-heading", trial.restHeading ?? "Nice work");
       ui.setHtml("#rest-text", trial.restHtml ?? "<p>Take a short break. Shake out your hand if you'd like.</p>");
-      ui.setText("#btn-next-trial", trial.restButton ?? "Start the next one");
+      ui.setText("#btn-next-trial", SPACE ? SPACE_LABEL : trial.restButton ?? "Start the next one");
       ui.showScreen("screen-rest");
       ui.setText("#rest-progress", trialSource.total != null
         ? `${i + 1} of ${trialSource.total} done`
         : `${i + 1} done`);
-      await ui.waitForClick("#btn-next-trial");
+      await ui.waitForContinue("#btn-next-trial", { space: SPACE });
     }
 
     trial = upcoming;
@@ -671,7 +684,7 @@ async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 
   let visibleSince = null;
   const btn = ui.$("#btn-position-done");
   btn.disabled = true;
-  ui.waitForClick("#btn-position-done").then(() => { stop = true; });
+  ui.waitForContinue("#btn-position-done", { space: SPACE }).then(() => { stop = true; });
 
   let lastVideoTime = -1;
   while (!stop) {

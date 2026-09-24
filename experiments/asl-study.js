@@ -77,14 +77,13 @@ export const TEACH_DEMO = "assets/demo/teach-demo.mp4";
 export const BREAKS = Object.freeze({
   teach: {
     restHeading: "Now we will teach you the signs",
-    restHtml: `<p>Copy the picture, then hold your hand still until the circle fills.</p>
-      ${demoVideo(TEACH_DEMO, "A short film of someone copying three signs")}`,
+    // No film here (JT, 2026-09-24): it would give some signs a head start.
+    restHtml: `<p>Copy the picture, then hold your hand still until the circle fills.</p>`,
     restButton: "Start",
   },
   post: {
     restHeading: "Now show us the signs again",
-    restHtml: `<p>Like the first part: no pictures, so sign each letter from memory.</p>
-      ${demoVideo(TEST_DEMO, "A short film of someone signing three letters")}`,
+    restHtml: `<p>Like the first part: no pictures, so sign each letter from memory.</p>`,
     restButton: "Start",
   },
 });
@@ -161,6 +160,11 @@ export default {
   },
 
   maxTrials: plannedTrials(),
+
+  // The camera check says which hand to use: the instructions page is off
+  // (config.js SCREENS.instructions), so this is where people learn it.
+  positionText: ({ demographics } = {}) =>
+    `Hold up your ${studyHand(demographics)} hand in front of the camera. Use only this hand for every letter. When we can see it clearly, the button below will turn on.`,
 
   // JT, 2026-09-23: this and a film of a few trials, nothing more.
   instructions: ({ demographics } = {}) => `

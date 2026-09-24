@@ -88,6 +88,13 @@ export const SCREENS = {
   // It only ever shows while FIREBASE above is unfilled, so turning it back on
   // costs nothing once data is really being collected.
   demoBanner: false,
+  // The instructions page before the first trial. Off (JT, 2026-09-24): its
+  // demo film gives some signs a head start. Set true to bring it back; the
+  // hand to use is said on the camera check instead.
+  instructions: false,
+  // The buttons that move between parts of the task say "Press space to
+  // continue" and the space bar works them (JT, 2026-09-24).
+  spaceToContinue: true,
 };
 
 
