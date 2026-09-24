@@ -220,6 +220,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       endReason: null,
       reported: false,
       wrongHand: false,     // the LAST hold of this trial was made with the other hand
+      wrongHandHolds: 0,    // holds made with the other hand (none of them answers)
       firstHoldRight: null, // the FIRST hold: accepted, with the asked-for hand (any kind of trial)
       statusText: null,
       statusAt: null,
@@ -323,21 +324,26 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
     base.motion = motion ? motion.stats ?? null : null;
     base.wrongHand = !!(handName && wrongHand);
     t.wrongHand = base.wrongHand;
-    if (t.firstHoldRight === null) t.firstHoldRight = v.outcome === "accept" && !base.wrongHand;
-    if (isQuiz(t.kind)) {
-      // Recorded and done. `consumed` stays false: nothing was charged to the
-      // learner. The analysis reads `outcome` AND `wrongHand`: a hold with the
-      // other hand is never a correct answer, whatever the model said.
-      t.lastOutcome = v.outcome;
-      // `complete` is the ring's burst: the hold was taken. It is the same
-      // for a right and a wrong hand, so it says nothing about correctness.
-      return [log("attempt", base), { kind: "complete" }, say("Recorded.", "done"), ...end("recorded")];
-    }
-    if (base.wrongHand && isIntroLike(t.kind)) {
-      // Not a handshape mistake, so no attempt is charged; the learner is told
-      // plainly which hand to use and gets time to switch.
+    if (base.wrongHand) {
+      // The other hand never answers, in any part of the study (JT,
+      // 2026-09-24: "if I say I'm right handed, don't let me use my left").
+      // Not a handshape mistake, so no attempt is charged and nothing ends:
+      // the learner is told which hand to use, which is an instruction, not a
+      // verdict, and the trial waits for a hold with that hand. The hold is
+      // still logged, flagged, so the analysis can count them.
+      t.wrongHandHolds++;
       base.attempt = t.attempts;
       return [log("attempt", base), say(`Use your ${handName} hand.`, "correction"), holdOff(HOLD_OFF_MS.correction)];
+    }
+    // The first hold made with the asked-for hand.
+    if (t.firstHoldRight === null) t.firstHoldRight = v.outcome === "accept";
+    if (isQuiz(t.kind)) {
+      // Recorded and done. `consumed` stays false: nothing was charged to the
+      // learner. The analysis reads `outcome` AND `wrongHand`.
+      t.lastOutcome = v.outcome;
+      // `complete` is the ring's burst: the hold was taken. It is the same
+      // for a right and a wrong answer, so it says nothing about correctness.
+      return [log("attempt", base), { kind: "complete" }, say("Recorded.", "done"), ...end("recorded")];
     }
     if (t.kind === "teach" && !gradable(t.letter)) {
       t.lastOutcome = v.outcome;
@@ -707,6 +713,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       ungraded,
       finalOutcome: t.endReason,
       wrongHand: t.wrongHand,
+      wrongHandHolds: t.wrongHandHolds,
       // firstAttemptCorrect is the adaptive schedule's, and stays null on
       // intros and teaching trials; this one is set on every kind of trial.
       firstHoldRight: t.firstHoldRight,
