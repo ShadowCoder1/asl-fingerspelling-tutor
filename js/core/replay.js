@@ -320,7 +320,10 @@ function tick() {
 
   // Buttons that are still disabled are a gate that has not opened yet (the
   // consent boxes, the positioning hold). Waiting for them is the test.
-  screen.querySelector("button:not(:disabled)")?.click();
+  // The screen's main button when it has one: a screen can also carry small
+  // extra buttons (the demo film's "Sound on"), and clicking those forever
+  // would stall the run on a page a person gets past with one click.
+  (screen.querySelector("button.primary:not(:disabled)") ?? screen.querySelector("button:not(:disabled)"))?.click();
 }
 
 /* Fill in whatever the visible screen is asking for: the consent affirmations,
