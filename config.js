@@ -59,7 +59,7 @@ export const STUDY = {
   // Where to send participants when they finish. Prolific gives you a URL
   // like https://app.prolific.com/submissions/complete?cc=XXXXXXXX
   // Leave as null to just show a thank-you screen with no redirect.
-  completionRedirectUrl: null,
+  completionRedirectUrl: "https://app.prolific.com/submissions/complete?cc=C1B2RP9Z",
 
 };
 
