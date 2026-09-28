@@ -245,9 +245,43 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
       while (recent.length && recent[0].tMs < tMs - WINDOW_MS - 2000) recent.shift();
       if (queued.length) { route(queued, tMs, effects); queued = []; }
 
-      const { progress, committed } = committer.push(tMs, flat, aspect);
+      const pushed = committer.push(tMs, flat, aspect);
+      const progress = pushed.progress;
+      let committed = pushed.committed;
+      /* J and Z are movements (JT, 2026-09-24: "if the algorithm detects it,
+       * you don't need the hold"). So on a J or Z trial the recent movement is
+       * checked on every frame, and the moment it is recognised that IS the
+       * answer: no hold. Only a recognised movement ends a trial this way; a
+       * wrong one still needs a hold to be graded (and to get its hint). Not
+       * while the ring is held shut (reading time, a decided trial's dwell). */
+      if (!committed && flat && MOTION_LETTERS.includes(flow.state?.letter) && !flow.state?.ended) {
+        const shut = committer.state.holdOffUntil !== null && tMs < committer.state.holdOffUntil;
+        if (!shut) {
+          const win = recent.filter((r) => r.flat && r.tMs >= tMs - WINDOW_MS);
+          const early = motionVerdict(flow.state.letter, win, aspect);
+          if (early.ok) committed = { flat, tStart: win[0]?.tMs ?? tMs, tCommit: tMs, handPresentFrac: 1, early: true };
+        }
+      }
       const cs = committer.state;
       route(flow.onStatus({ tMs, tooSmall: cs.tooSmall, lastResetReason: cs.lastResetReason }), tMs, effects);
+
+      /* ...and on a J or Z trial a "hold" whose fingertip is still travelling
+       * is not an answer: the hold rule lets a slowly moving hand count as
+       * still, which on a J fired half-way down the stroke and graded half a
+       * letter. Unless the movement is already recognised, it is ignored and
+       * the drawing goes on. */
+      if (committed && !committed.early && MOTION_LETTERS.includes(flow.state?.letter)) {
+        const tip = flow.state.letter === "J" ? 20 : 8;
+        const seg = recent.filter((r) => r.flat && r.tMs >= committed.tStart && r.tMs <= committed.tCommit);
+        if (seg.length > 1) {
+          const P = (f, i) => [f[3 * i] * aspect, f[3 * i + 1]];
+          const palm = Math.hypot(...P(seg[0].flat, 0).map((v, k) => v - P(seg[0].flat, 9)[k])) || 1;
+          const t0 = P(seg[0].flat, tip);
+          const travel = Math.max(...seg.map((r) => Math.hypot(...P(r.flat, tip).map((v, k) => v - t0[k])))) / palm;
+          const recognised = motionVerdict(flow.state.letter, recent.filter((r) => r.tMs >= committed.tStart - WINDOW_MS && r.tMs <= committed.tCommit), aspect).ok;
+          if (travel > 0.3 && !recognised) committed = null;
+        }
+      }
 
       let sign = null;
       if (committed) {

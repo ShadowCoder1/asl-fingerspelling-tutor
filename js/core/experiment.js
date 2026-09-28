@@ -91,6 +91,18 @@ async function run(exp) {
     return fail("This link is not usable.", replayPathComplaint(replay.raw));
   }
 
+  // Phones cannot do this task (it needs a webcam and a screen big enough for
+  // the camera beside the letter). Prolific's desktop-only filter is the
+  // first line; this is the second, for anyone who gets past it.
+  const isPhone = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches
+    && Math.min(screen.width, screen.height) < 700;
+  if (!replay.path && isPhone) {
+    const h = document.querySelector("#screen-error h2");
+    if (h) { h.textContent = "This study needs a computer"; h.classList.remove("bad"); }
+    return fail("Please use a laptop or desktop computer.",
+      "This study needs a webcam and a larger screen, so it can't be done on a phone. Open the same link on a computer to take part.");
+  }
+
   const replayData = replay.path ? await loadReplay(replay.path) : null;
   if (replay.autorun) {
     startAutorun({ onError: (err) => fail("The unattended run could not continue.", err?.message || String(err)) });

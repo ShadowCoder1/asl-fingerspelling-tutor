@@ -18,8 +18,10 @@
  *               sideways direction at least twice (right, back, right).
  *
  * Palm-length = wrist to middle knuckle, so the rule does not care how far
- * the hand is from the camera. The learner draws the letter, then holds the
- * end pose still like any other letter; the hold is what triggers grading. */
+ * the hand is from the camera. The movement is checked on every frame of a J
+ * or Z trial and a recognised one is the answer at once, with no hold
+ * (experiments/asl-tutor/engine.js, JT 2026-09-24); holding still is only the
+ * fallback that grades a movement that was not recognised. */
 
 export const MOTION_LETTERS = Object.freeze(["J", "Z"]);
 export const EXT = 1.45;
@@ -110,6 +112,6 @@ export function motionVerdict(letter, frames, aspect) {
 }
 
 export const MOTION_HINTS = Object.freeze({
-  J: { shape: "For J, start with an I: only your pinky up, the other fingers curled.", motion: "For J, draw a J in the air with your pinky: down, then curve it round. Then hold still." },
-  Z: { shape: "For Z, point with your index finger only; curl the others.", motion: "For Z, draw a Z in the air with your index finger: across, back diagonally, across again. Then hold still." },
+  J: { shape: "For J, start with an I: only your pinky up, the other fingers curled.", motion: "For J, draw a J in the air with your pinky: down, then curve it round." },
+  Z: { shape: "For Z, point with your index finger only; curl the others.", motion: "For Z, draw a Z in the air with your index finger: across, back diagonally, across again." },
 });

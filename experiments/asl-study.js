@@ -9,7 +9,8 @@
  *                 gets the hint.                                  5 x 10 = 50
  *   3. POST-TEST  as the baseline.                                5 x 1 = 5
  *
- * Five letters by default (DEMO_LETTERS, JT 2026-09-23); ?letters= for more.
+ * All 26 letters by default (JT 2026-09-25, the first data collection);
+ * ?letters=BDFIV is the five-letter demo shown to Karen (DEMO_LETTERS).
  *
  * Every part is made of shuffled passes through the alphabet (a pass = each
  * letter once), seeded from the participant id, so no letter is seen twice
@@ -113,7 +114,7 @@ export function parseReps(raw) {
 }
 
 export function parseStudyLetters(raw) {
-  if (raw === null) return DEMO_LETTERS.slice();
+  if (raw === null) return LETTERS.slice();
   const letters = raw.toUpperCase().split("");
   const bad = letters.filter((l) => !LETTERS.includes(l));
   if (bad.length || !letters.length) throw new Error(`?letters=${raw} contains ${bad.join(", ") || "nothing"}, which are not letters. Use A-Z.`);
@@ -133,7 +134,7 @@ function plannedTrials() {
     const r = parseReps(params.get("reps"));
     return parseStudyLetters(params.get("letters")).length * (r.pre + r.teach + r.post);
   } catch {
-    return DEMO_LETTERS.length * (DEFAULT_REPS.pre + DEFAULT_REPS.teach + DEFAULT_REPS.post);
+    return LETTERS.length * (DEFAULT_REPS.pre + DEFAULT_REPS.teach + DEFAULT_REPS.post);
   }
 }
 
@@ -174,7 +175,7 @@ export default {
     <p class="subtle">Make the sign, then hold your hand still until the circle fills.</p>`,
 
   mount(el, { participant, demographics }) {
-    let letters = DEMO_LETTERS.slice(), reps = { ...DEFAULT_REPS };
+    let letters = LETTERS.slice(), reps = { ...DEFAULT_REPS };
     try {
       letters = parseStudyLetters(params.get("letters"));
       reps = parseReps(params.get("reps"));
