@@ -166,14 +166,24 @@ async function run(exp) {
   let demographics = {};
   if (SCREENS?.demographics !== false && DEMOGRAPHIC_QUESTIONS.length) {
     const formEl = ui.$("#demographics-form");
+    // A link that arrived with no Prolific ID (someone opened a copy of the
+    // plain link) gets a box for it at the top, so the session can still be
+    // matched to their submission. Optional, so a demo viewer is not stuck;
+    // anything typed has to look like a Prolific ID (24 letters and numbers).
+    const questions = participant.participantId ? DEMOGRAPHIC_QUESTIONS : [{
+      id: "participantId", label: "Your Prolific ID", type: "text",
+      help: "If you came here from Prolific, paste your Prolific ID (it's on your Prolific profile). Otherwise leave this blank.",
+      placeholder: "24 letters and numbers", pattern: "^[A-Za-z0-9]{24}$",
+      patternMessage: "A Prolific ID is 24 letters and numbers. Please check it, or leave this blank.",
+    }, ...DEMOGRAPHIC_QUESTIONS.filter((q) => q.id !== "participantId")];
     // If they came from Prolific, fill their ID in rather than asking twice.
-    renderForm(formEl, DEMOGRAPHIC_QUESTIONS,
+    renderForm(formEl, questions,
                participant.participantId ? { participantId: participant.participantId } : {});
     ui.showScreen("screen-demographics");
 
     while (true) {
       await ui.waitForClick("#btn-demographics");
-      const { ok, values, firstError } = readForm(formEl, DEMOGRAPHIC_QUESTIONS);
+      const { ok, values, firstError } = readForm(formEl, questions);
       if (ok) { demographics = values; break; }
       focusField(formEl, firstError);
     }
@@ -181,8 +191,10 @@ async function run(exp) {
 
   // A question with id "participantId" doubles as the participant's ID.
   if (!participant.participantId) {
-    participant.participantId = demographics.participantId
+    participant.participantId = demographics.participantId?.trim()
       || `anon_${Math.random().toString(36).slice(2, 8)}`;
+    // Typed in by hand rather than read from the link: say so in the data.
+    if (demographics.participantId) participant.source = "typed-prolific-id";
   }
 
   /* ---- 2. Firebase (optional) ------------------------------------------ */

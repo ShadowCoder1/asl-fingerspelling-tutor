@@ -348,7 +348,10 @@ function answerEverything(screen) {
     if (field.value !== "") continue;
     // A number question usually has a minimum (age starts at 18), and the
     // smallest allowed answer is the one guaranteed to validate.
-    field.value = field.type === "number" ? (field.min || "1") : E2E_ANSWER;
+    // The Prolific ID box only takes a 24-character ID: give it one that is
+    // plainly a test run in the data.
+    const isPid = field.name === "participantId" || /participantId$/.test(field.id);
+    field.value = field.type === "number" ? (field.min || "1") : isPid ? E2E_ANSWER.padEnd(24, "0") : E2E_ANSWER;
     fire(field);
   }
 }

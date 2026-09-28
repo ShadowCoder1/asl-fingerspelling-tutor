@@ -178,6 +178,7 @@ function validate(q, value) {
   if (q.required && empty) return "Please answer this question.";
   if (empty) return null;
 
+  if (q.pattern && !new RegExp(q.pattern).test(String(value).trim())) return q.patternMessage ?? "Please check this answer.";
   if (q.type === "number") {
     if (!Number.isFinite(value)) return "Please enter a number.";
     if (q.min != null && value < q.min) return `Please enter ${q.min} or more.`;
