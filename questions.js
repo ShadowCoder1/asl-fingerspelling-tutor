@@ -71,9 +71,12 @@ export const DEMOGRAPHIC_QUESTIONS = [
     required: true,
     options: ["Female", "Male", "Intersex", "Prefer not to say"] },
 
-  { id: "signLanguageYears",
-    label: "How many years have you used any sign language?",
-    help: "Count classes, apps and everyday use. If you have never signed, choose None.",
+  // ASL specifically (JT, 2026-09-28): the pilot asked about ANY sign language,
+  // and three people who said 1 to 2 years knew almost none of the ASL
+  // alphabet. A new id, so these answers are never pooled with the pilot's.
+  { id: "aslYears",
+    label: "How many years have you used American Sign Language (ASL)?",
+    help: "Count classes, apps and everyday use. Other sign languages (for example BSL) do not count here. If you have never used ASL, choose None.",
     type: "radio",
     required: true,
     options: ["None",

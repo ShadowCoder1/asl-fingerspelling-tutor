@@ -27,7 +27,7 @@ import { featuresFromFlat } from "../../tutor/features.js";
 import { createCommitter, shapeDistance, DEFAULTS as COMMIT_DEFAULTS } from "../../tutor/commit.js";
 import { verify, standardize, scoreAll } from "../../tutor/verifier.js";
 import { createFlow } from "./flow.js";
-import { MOTION_LETTERS, motionVerdict, WINDOW_MS } from "../../tutor/motion.js";
+import { MOTION_LETTERS, MOTION_HINTS, MOTION_DEFAULTS, motionVerdict, inShape } from "../../tutor/motion.js";
 
 /* Which hand made a hold. The geometry (tutor/hand-frame.js chirality) is
  * trusted when it is clear; when it is not, MediaPipe's own label, by majority
@@ -107,6 +107,9 @@ export const TUTOR_COMMIT_OPTS = Object.freeze({
  * tucked, a finger straightened -- moves two landmarks of a finger by several
  * times that. experiments/asl-tutor/flow.js says what happens to a repeat. */
 export const SAME_POSE_TOL = 0.15;
+/* How many still holds in a J or Z's starting shape are taken as the pause
+ * before the drawing (see frame()) before one is graded as the answer. */
+export const START_PAUSES_ALLOWED = 2;
 
 /* Is the whole hand in the picture? Every landmark at least 2% in from every
  * edge. MediaPipe extrapolates the landmarks of a hand that is partly out of
@@ -180,13 +183,14 @@ export function inspectFrame(model, { flat, aspect, videoHeight }, target) {
  * @param {object} [o.commitOpts]
  * @param {object} [o.deps]      passed to createFlow (tests stub the verifier)
  */
-export function createEngine({ model, letters, hintPolicy = "strict", commitOpts = TUTOR_COMMIT_OPTS, deps = {}, gradeAll = false, hand = null }) {
+export function createEngine({ model, letters, hintPolicy = "strict", commitOpts = TUTOR_COMMIT_OPTS, deps = {}, gradeAll = false, hand = null, motionParams = MOTION_DEFAULTS }) {
   const committer = createCommitter(commitOpts);
   let recent = [];       // { tMs, flat, label } for the motion letters and the hand vote
   let flow = null;
   let lastGraded = null;   // the points of the last pose graded in THIS trial
   let queued = [];     // effects waiting for the trial's first frame
   let pending = [];    // { dueT, effect }: effects the flow asked to have LATER
+  let startPauses = 0; // still holds in a J/Z starting shape let pass this trial
 
   /* Sort one batch of the flow's effects into: do now (returned to the glue),
    * do later (kept here), and the two the engine carries out itself. */
@@ -226,6 +230,7 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
       recent = [];
       pending = [];
       lastGraded = null;
+      startPauses = 0;
       queued = flow.startTrial(trial);
     },
 
@@ -242,7 +247,7 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
       if (flow === null) throw new Error("engine.frame: no trial has been started");
       const effects = [];
       recent.push({ tMs, flat, label: handedness });
-      while (recent.length && recent[0].tMs < tMs - WINDOW_MS - 2000) recent.shift();
+      while (recent.length && recent[0].tMs < tMs - motionParams.WINDOW_MS - 2000) recent.shift();
       if (queued.length) { route(queued, tMs, effects); queued = []; }
 
       const pushed = committer.push(tMs, flat, aspect);
@@ -257,8 +262,8 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
       if (!committed && flat && MOTION_LETTERS.includes(flow.state?.letter) && !flow.state?.ended) {
         const shut = committer.state.holdOffUntil !== null && tMs < committer.state.holdOffUntil;
         if (!shut) {
-          const win = recent.filter((r) => r.flat && r.tMs >= tMs - WINDOW_MS);
-          const early = motionVerdict(flow.state.letter, win, aspect);
+          const win = recent.filter((r) => r.flat && r.tMs >= tMs - motionParams.WINDOW_MS);
+          const early = motionVerdict(flow.state.letter, win, aspect, motionParams);
           if (early.ok) committed = { flat, tStart: win[0]?.tMs ?? tMs, tCommit: tMs, handPresentFrac: 1, early: true };
         }
       }
@@ -278,9 +283,25 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
           const palm = Math.hypot(...P(seg[0].flat, 0).map((v, k) => v - P(seg[0].flat, 9)[k])) || 1;
           const t0 = P(seg[0].flat, tip);
           const travel = Math.max(...seg.map((r) => Math.hypot(...P(r.flat, tip).map((v, k) => v - t0[k])))) / palm;
-          const recognised = motionVerdict(flow.state.letter, recent.filter((r) => r.tMs >= committed.tStart - WINDOW_MS && r.tMs <= committed.tCommit), aspect).ok;
+          const recognised = motionVerdict(flow.state.letter, recent.filter((r) => r.tMs >= committed.tStart - motionParams.WINDOW_MS && r.tMs <= committed.tCommit), aspect, motionParams).ok;
           if (travel > 0.3 && !recognised) committed = null;
         }
+      }
+
+      /* ...and a J or Z hand held still in the letter's own starting shape (an
+       * I for J, a pointing index for Z) is the pause before the drawing, not
+       * an answer. In the Prolific pilot (2026-09-28) people very often formed
+       * the I, checked it against the picture, and only then drew the J; the
+       * pause was graded as the answer and marked wrong. It is let through
+       * only once it has been held so long that it plainly IS the answer
+       * (START_PAUSES_ALLOWED re-holds, about eight seconds). On a teaching
+       * trial the pause gets the drawing hint; on a test it gets nothing. */
+      if (committed && !committed.early && MOTION_LETTERS.includes(flow.state?.letter) && startPauses < START_PAUSES_ALLOWED
+          && inShape(flow.state.letter, committed.flat, aspect, motionParams)
+          && !motionVerdict(flow.state.letter, recent.filter((r) => r.tMs >= committed.tStart - motionParams.WINDOW_MS && r.tMs <= committed.tCommit), aspect, motionParams).ok) {
+        startPauses++;
+        committed = null;
+        if (flow.state.kind === "teach" || flow.state.kind === "intro") effects.push({ kind: "status", text: MOTION_HINTS[flow.state.letter].motion });
       }
 
       let sign = null;
@@ -315,7 +336,7 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
         if (!samePose) lastGraded = points;
         const letter = flow.state?.letter;
         const motion = MOTION_LETTERS.includes(letter)
-          ? motionVerdict(letter, recent.filter((r) => r.tMs >= committed.tStart - WINDOW_MS && r.tMs <= committed.tCommit), aspect)
+          ? motionVerdict(letter, recent.filter((r) => r.tMs >= committed.tStart - motionParams.WINDOW_MS && r.tMs <= committed.tCommit), aspect, motionParams)
           : null;
         route(flow.onCommit({ committed, x, quality, sign, samePose, motion, wrongHand }), tMs, effects);
       }

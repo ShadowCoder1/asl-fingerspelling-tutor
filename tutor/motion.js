@@ -30,6 +30,9 @@ export const WINDOW_MS = 3500;       // how far back from the hold to look for t
 export const MIN_SHAPE_FRAMES = 6;
 export const J_DROP = 0.45, J_HOOK = 0.25;
 export const Z_WIDTH = 0.6, Z_DROP = 0.35, Z_REVERSALS = 2, Z_HYST = 0.15;
+/* The same numbers as one object: the engine takes it as an option, so a
+ * replay of recorded trials can try other values (research/prolific-pilot-2026-09-28). */
+export const MOTION_DEFAULTS = Object.freeze({ WINDOW_MS, EXT, CURL, MIN_SHAPE_FRAMES, J_DROP, J_HOOK, Z_WIDTH, Z_DROP, Z_REVERSALS, Z_HYST });
 
 const FINGER = { index: [5, 8], middle: [9, 12], ring: [13, 16], pinky: [17, 20] };
 const SHAPE = {
@@ -47,10 +50,10 @@ export function extension(flat, finger, aspect) {
   return d0 > 0 ? dist(pt(flat, t, aspect), w) / d0 : NaN;
 }
 
-export function inShape(letter, flat, aspect) {
+export function inShape(letter, flat, aspect, p = MOTION_DEFAULTS) {
   const s = SHAPE[letter];
   if (!s || !flat || flat.some((v) => !Number.isFinite(v))) return false;
-  return s.out.every((f) => extension(flat, f, aspect) >= EXT) && s.curled.every((f) => extension(flat, f, aspect) <= CURL);
+  return s.out.every((f) => extension(flat, f, aspect) >= p.EXT) && s.curled.every((f) => extension(flat, f, aspect) <= p.CURL);
 }
 
 function smooth(points, k = 5) {
@@ -78,12 +81,13 @@ export function reversals(xs, hyst) {
  * @param {"J"|"Z"} letter
  * @param {{tMs:number, flat:number[]|null}[]} frames  the frames before and during the hold
  * @param {number} aspect
+ * @param {object} [p]  thresholds (MOTION_DEFAULTS)
  * @returns {{ok:boolean, reason:string|null, stats:object}}
  */
-export function motionVerdict(letter, frames, aspect) {
+export function motionVerdict(letter, frames, aspect, p = MOTION_DEFAULTS) {
   const s = SHAPE[letter];
-  const kept = frames.filter((f) => inShape(letter, f.flat, aspect));
-  if (kept.length < MIN_SHAPE_FRAMES) return { ok: false, reason: "shape", stats: { shapeFrames: kept.length } };
+  const kept = frames.filter((f) => inShape(letter, f.flat, aspect, p));
+  if (kept.length < p.MIN_SHAPE_FRAMES) return { ok: false, reason: "shape", stats: { shapeFrames: kept.length } };
   const palm = kept.map((f) => dist(pt(f.flat, 0, aspect), pt(f.flat, 9, aspect))).sort((a, b) => a - b)[kept.length >> 1];
   const tip = smooth(kept.map((f) => pt(f.flat, s.tip, aspect))).map(([x, y]) => [x / palm, y / palm]);
   const xs = tip.map((p) => p[0]), ys = tip.map((p) => p[1]);
@@ -102,12 +106,13 @@ export function motionVerdict(letter, frames, aspect) {
     const tail = xs.slice(i70);
     const hook = Math.max(...tail) - Math.min(...tail);
     Object.assign(stats, { drop: +drop.toFixed(3), hook: +hook.toFixed(3) });
-    return { ok: drop >= J_DROP && hook >= J_HOOK, reason: drop >= J_DROP && hook >= J_HOOK ? null : "motion", stats };
+    const ok = drop >= p.J_DROP && hook >= p.J_HOOK;
+    return { ok, reason: ok ? null : "motion", stats };
   }
   const drop = Math.max(...ys) - Math.min(...ys);
-  const rev = reversals(xs, Z_HYST);
+  const rev = reversals(xs, p.Z_HYST);
   Object.assign(stats, { drop: +drop.toFixed(3), reversals: rev });
-  const ok = width >= Z_WIDTH && drop >= Z_DROP && rev >= Z_REVERSALS;
+  const ok = width >= p.Z_WIDTH && drop >= p.Z_DROP && rev >= p.Z_REVERSALS;
   return { ok, reason: ok ? null : "motion", stats };
 }
 

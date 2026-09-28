@@ -87,11 +87,16 @@ export const END_DWELL_MS = Object.freeze({
 });
 export const HOLD_OFF_MS = Object.freeze({
   intro: 1500,      // a picture and a description to look at first
-  teach: 1500,
   test: 700,        // one letter to read
   review: 700,
-  pre: 700,
-  post: 700,
+  // The study's trials are never held shut at the start (JT, 2026-09-28): a
+  // hand already in the right shape counts from the first frame, so the time
+  // to sign has no floor (with 1.5 s here, 40% of the pilot's teaching trials
+  // sat on it). An accidental answer is still unlikely: it takes a 0.9 s hold,
+  // and a pose carried over from the last letter must change first.
+  teach: 0,
+  pre: 0,
+  post: 0,
   correction: 2200, // a hint sentence, usually with the picture beside it
   borderline: 1200,
   sensor: 1500,
