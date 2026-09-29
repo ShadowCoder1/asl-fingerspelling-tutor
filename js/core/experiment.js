@@ -166,19 +166,11 @@ async function run(exp) {
   let demographics = {};
   if (SCREENS?.demographics !== false && DEMOGRAPHIC_QUESTIONS.length) {
     const formEl = ui.$("#demographics-form");
-    // A link that arrived with no Prolific ID (someone opened a copy of the
-    // plain link) gets a box for it at the top, so the session can still be
-    // matched to their submission. Optional, so a demo viewer is not stuck;
-    // anything typed has to look like a Prolific ID (24 letters and numbers).
-    const questions = participant.participantId ? DEMOGRAPHIC_QUESTIONS : [{
-      id: "participantId", label: "Your Prolific ID", type: "text",
-      help: "If you came here from Prolific, paste your Prolific ID (it's on your Prolific profile). Otherwise leave this blank.",
-      placeholder: "24 letters and numbers", pattern: "^[A-Za-z0-9]{24}$",
-      patternMessage: "A Prolific ID is 24 letters and numbers. Please check it, or leave this blank.",
-    }, ...DEMOGRAPHIC_QUESTIONS.filter((q) => q.id !== "participantId")];
-    // If they came from Prolific, fill their ID in rather than asking twice.
-    renderForm(formEl, questions,
-               participant.participantId ? { participantId: participant.participantId } : {});
+    // (A "Your Prolific ID" box for links that arrived without one was asked
+    // here during the Prolific runs; removed 2026-09-28 before sharing the
+    // link with other researchers.)
+    const questions = DEMOGRAPHIC_QUESTIONS;
+    renderForm(formEl, questions, {});
     ui.showScreen("screen-demographics");
 
     while (true) {
@@ -255,6 +247,13 @@ async function run(exp) {
     aspect: video.videoWidth / video.videoHeight,
   };
 
+  // The experiment's objection to the hand in view, if it has one (the ASL
+  // study: the other hand). Shared by the camera check and the re-check below.
+  const handObjection = (res, k) => {
+    try { return exp.handProblem?.(res, k, { aspect: videoInfo.aspect, demographics }) ?? null; }
+    catch (err) { console.warn("handProblem failed; letting the hand pass", err); return null; }
+  };
+
   /* ---- 4. Positioning check -------------------------------------------- */
   // A live preview with the landmarks drawn on top. Participants fix their own
   // lighting and framing here, which is far more effective than instructions.
@@ -272,7 +271,7 @@ async function run(exp) {
     const positionText = exp.positionText?.({ demographics });
     if (positionText) ui.setText("#position-text", positionText);
     if (SPACE) ui.setText("#btn-position-done", SPACE_LABEL);
-    await positioningLoop(video, tracker, ctx, canvas, stage, (res) => handIndex(exp, res, videoInfo, demographics));
+    await positioningLoop(video, tracker, ctx, canvas, stage, (res) => handIndex(exp, res, videoInfo, demographics), handObjection);
   }
 
   /* ---- 5. Instructions -------------------------------------------------- */
@@ -454,6 +453,18 @@ async function run(exp) {
      * one. For a fixed trials array this simply asks for trials[i+1], which is
      * already known, so it changes nothing about the order or timing of what
      * an array-based experiment does. */
+    /* The experiment can ask for the camera check again between trials (the
+     * ASL study: several holds in a row with the other hand). Not in a replay:
+     * there is no one to hold anything up. */
+    if (!replayData && exp.needsHandCheck?.()) {
+      const t = exp.handCheckText?.({ demographics }) ?? {};
+      ui.setText("#position-heading", t.heading ?? "Let's check your camera");
+      if (t.text) ui.setText("#position-text", t.text);
+      ui.showScreen("screen-position");
+      await positioningLoop(video, tracker, ctx, canvas, stage, (res) => handIndex(exp, res, videoInfo, demographics), handObjection);
+      exp.handCheckDone?.();
+    }
+
     const upcoming = await trialSource.next(trialSummaries);
 
     // skipRest: no "take a break" screen after this trial. Rest screens exist
@@ -704,7 +715,7 @@ async function collectConsent(statements) {
  * The positioning preview: run the tracker live until the participant has been
  * visible for a couple of continuous seconds, then let them continue.
  * ---------------------------------------------------------------------- */
-async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 0) {
+async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 0, problem = () => null) {
   ui.$("#position-stage-slot").append(stage);
 
   let stop = false;
@@ -721,7 +732,10 @@ async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 
       const k = pick(res);
       drawLandmarks(ctx, canvas, k >= 0 ? res.landmarks[k] : null);
 
-      const seen = k >= 0;
+      // A hand the experiment objects to (the other hand, in the ASL study)
+      // does not count as seen, and the status line says why.
+      const objection = k >= 0 ? problem(res, k) : null;
+      const seen = k >= 0 && !objection;
       if (seen && visibleSince === null) visibleSince = performance.now();
       if (!seen) visibleSince = null;
 
@@ -733,7 +747,7 @@ async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 
       } else {
         btn.disabled = true;
         ui.setText("#position-status",
-          seen ? "Hold still…" : "Your hand is not visible. Move it into the frame.");
+          objection ?? (seen ? "Hold still…" : "Your hand is not visible. Move it into the frame."));
         ui.$("#position-status").className = seen ? "status" : "status bad";
       }
     }

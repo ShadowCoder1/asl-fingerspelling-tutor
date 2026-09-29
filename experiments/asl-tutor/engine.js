@@ -183,7 +183,7 @@ export function inspectFrame(model, { flat, aspect, videoHeight }, target) {
  * @param {object} [o.commitOpts]
  * @param {object} [o.deps]      passed to createFlow (tests stub the verifier)
  */
-export function createEngine({ model, letters, hintPolicy = "strict", commitOpts = TUTOR_COMMIT_OPTS, deps = {}, gradeAll = false, hand = null, motionParams = MOTION_DEFAULTS }) {
+export function createEngine({ model, letters, hintPolicy = "strict", commitOpts = TUTOR_COMMIT_OPTS, deps = {}, gradeAll = false, hand = null, motionParams = MOTION_DEFAULTS, holdOffMs = undefined }) {
   const committer = createCommitter(commitOpts);
   let recent = [];       // { tMs, flat, label } for the motion letters and the hand vote
   let flow = null;
@@ -226,7 +226,7 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
      * (tutor/commit.js nextTrial has the story). */
     startTrial(trial) {
       committer.nextTrial();
-      flow = createFlow({ model, letters, hintPolicy, deps, gradeAll, handName: hand });
+      flow = createFlow({ model, letters, hintPolicy, deps, gradeAll, handName: hand, ...(holdOffMs ? { holdOffMs } : {}) });
       recent = [];
       pending = [];
       lastGraded = null;

@@ -173,7 +173,7 @@ function logNumber(v) {
 /* gradeAll: grade every letter the model has, tier-blind (the study). handName:
  * the hand the learner was asked to use ("right" / "left"), or null for
  * "either" -- then a hold with the other hand is never counted as correct. */
-export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts = MAX_ATTEMPTS, deps = {}, gradeAll = false, handName = null }) {
+export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts = MAX_ATTEMPTS, deps = {}, gradeAll = false, handName = null, holdOffMs = HOLD_OFF_MS }) {
   if (!model) throw new Error("createFlow: a loaded model is required");
   if (hintPolicy !== "strict" && hintPolicy !== "lenient") {
     throw new Error(`createFlow: hintPolicy must be "strict" or "lenient", got ${JSON.stringify(hintPolicy)}`);
@@ -247,7 +247,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       // The landmark skeleton helps someone copying a shape and gives away
       // nothing; during a test it is a distraction from their own hand.
       overlay: intro,
-    }, holdOff(HOLD_OFF_MS[trial.kind] ?? HOLD_OFF_MS.test)];
+    }, holdOff(holdOffMs[trial.kind] ?? holdOffMs.test)];
   }
 
   /* One committed hold: the learner has declared an attempt (tutor/commit.js).
@@ -338,7 +338,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       // still logged, flagged, so the analysis can count them.
       t.wrongHandHolds++;
       base.attempt = t.attempts;
-      return [log("attempt", base), say(`Use your ${handName} hand.`, "correction"), holdOff(HOLD_OFF_MS.correction)];
+      return [log("attempt", base), say(`Use your ${handName} hand.`, "correction"), holdOff(holdOffMs.correction)];
     }
     // The first hold made with the asked-for hand.
     if (t.firstHoldRight === null) t.firstHoldRight = v.outcome === "accept";
@@ -360,7 +360,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       base.repeat = true;
       if (v.outcome !== "accept") {
         base.attempt = t.attempts;
-        return [log("attempt", base), { kind: "status", text: SAME_POSE_LINE }, holdOff(HOLD_OFF_MS.samePose)];
+        return [log("attempt", base), { kind: "status", text: SAME_POSE_LINE }, holdOff(holdOffMs.samePose)];
       }
     }
     t.lastOutcome = v.outcome;
@@ -382,7 +382,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
     const hint = MOTION_HINTS[t.letter][motion?.reason === "shape" ? "shape" : "motion"];
     const effects = [log("attempt", base), say(hint, "correction")];
     if (t.attempts >= INTRO_MAX_MISSES) effects.push(say("Good try — let's move on.", "done"), ...end("intro-done"));
-    else effects.push(holdOff(HOLD_OFF_MS.correction));
+    else effects.push(holdOff(holdOffMs.correction));
     return effects;
   }
 
@@ -392,7 +392,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       // The same hand again: nothing new to say about it (SAME_POSE_LINE).
       base.repeat = true;
       base.attempt = t.attempts;
-      return [log("attempt", base), { kind: "status", text: SAME_POSE_LINE }, holdOff(HOLD_OFF_MS.samePose)];
+      return [log("attempt", base), { kind: "status", text: SAME_POSE_LINE }, holdOff(holdOffMs.samePose)];
     }
     base.repeat = samePose === true && missedBefore;
     t.lastOutcome = v.outcome;
@@ -410,12 +410,12 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
     if (v.outcome === "abstain") {
       base.attempt = t.attempts;
       if (v.reason === "borderline") {
-        return [log("attempt", base), say(ABSTAIN_LINES.borderline, "neutral"), holdOff(HOLD_OFF_MS.borderline)];
+        return [log("attempt", base), say(ABSTAIN_LINES.borderline, "neutral"), holdOff(holdOffMs.borderline)];
       }
       t.sensorAbstains++;
       const effects = [log("attempt", base), say(ABSTAIN_LINES[v.reason] ?? ABSTAIN_LINES.tracking, "sensor")];
       if (t.sensorAbstains >= MAX_SENSOR_ABSTAINS) effects.push(...end("sensor"));
-      else effects.push(holdOff(HOLD_OFF_MS.sensor));
+      else effects.push(holdOff(holdOffMs.sensor));
       return effects;
     }
 
@@ -430,7 +430,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
     if (t.attempts >= INTRO_MAX_MISSES) {
       effects.push(say(t.kind === "teach" ? "Let's move on." : `Let's move on — ${t.letter} will come back as a test.`, "done"), ...end("intro-done"));
     } else {
-      effects.push(holdOff(HOLD_OFF_MS.correction));
+      effects.push(holdOff(holdOffMs.correction));
     }
     return effects;
   }
@@ -464,10 +464,10 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
         t.borderlineRun = 0;
         base.reason = "borderline-escalated";
         base.attempt = t.attempts;
-        return [log("attempt", base), ...correctionEffects(base), holdOff(HOLD_OFF_MS.correction)];
+        return [log("attempt", base), ...correctionEffects(base), holdOff(holdOffMs.correction)];
       }
       base.attempt = t.attempts;
-      return [log("attempt", base), say(ABSTAIN_LINES.borderline, "neutral"), holdOff(HOLD_OFF_MS.borderline)];
+      return [log("attempt", base), say(ABSTAIN_LINES.borderline, "neutral"), holdOff(holdOffMs.borderline)];
     }
 
     // Anything else the grader would not answer. "tier2" should be impossible
@@ -485,7 +485,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       effects.push(say(ABSTAIN_LINES.tracking, "sensor"), ...end("sensor"));
       return effects;
     }
-    effects.push(say(ABSTAIN_LINES[v.reason] ?? ABSTAIN_LINES.tracking, "sensor"), holdOff(HOLD_OFF_MS.sensor));
+    effects.push(say(ABSTAIN_LINES[v.reason] ?? ABSTAIN_LINES.tracking, "sensor"), holdOff(holdOffMs.sensor));
     return effects;
   }
 
@@ -512,7 +512,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       t.assisted = true;
       effects.push(...end("failed"));
     } else {
-      effects.push(holdOff(HOLD_OFF_MS.correction));
+      effects.push(holdOff(holdOffMs.correction));
     }
     return effects;
   }

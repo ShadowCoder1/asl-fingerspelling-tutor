@@ -34,7 +34,7 @@ import { createEngine, TUTOR_COMMIT_OPTS } from "./asl-tutor/engine.js";
 import { createDebug } from "./asl-tutor/debug.js";
 import { mountTutor } from "./asl-tutor/ui.js";
 import { drawLandmarks } from "../js/core/experiment.js";
-import { createHandPicker } from "../tutor/pick-hand.js";
+import { createHandPicker, handSide } from "../tutor/pick-hand.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 
 const MODEL_PATH = "tutor/model.json";
@@ -93,6 +93,22 @@ export const BREAKS = Object.freeze({
  * @param {string[]} letters
  * @param {{pre:number, teach:number, post:number}} reps
  * @param {number} seed */
+/* Signing with the other hand (Prolific, 2026-09-28): one person said she writes
+ * with her right hand, signed with her left, and was told "Use your right hand."
+ * 831 times over two hours; nothing stopped her. Now this many holds IN A ROW
+ * with the other hand end the trial and bring back the camera check, which
+ * does not let anyone past until it sees the asked-for hand. */
+export const WRONG_HAND_LIMIT = 3;
+export function nextWrongStreak(streak, attempt) {
+  return attempt.wrongHand ? streak + 1 : 0;
+}
+/* The camera check's objection to this hand, or null: the asked-for hand, or
+ * one the tracker cannot tell, may pass. */
+export function handProblem(landmarks, label, aspect, want) {
+  const side = handSide(landmarks, label, aspect);
+  return side && side !== want ? `That is your ${side} hand. Please hold up your ${want} hand.` : null;
+}
+
 export function buildPlan(letters, reps, seed) {
   const prng = createPrng(seed);
   const plan = [];
@@ -161,6 +177,21 @@ export default {
   },
 
   maxTrials: plannedTrials(),
+
+  // The camera check lets nobody past with the other hand, at the start or
+  // when WRONG_HAND_LIMIT holds in a row were made with it.
+  handProblem(res, k, { aspect, demographics }) {
+    return handProblem(res.landmarks[k], res.handedness?.[k], aspect, studyHand(demographics));
+  },
+  needsHandCheck: () => !!session?.handCheck,
+  handCheckDone() { if (session) { session.handCheck = false; session.wrongStreak = 0; session.handChecks = (session.handChecks ?? 0) + 1; } },
+  handCheckText: ({ demographics } = {}) => {
+    const hand = studyHand(demographics), other = hand === "right" ? "left" : "right";
+    return {
+      heading: `Please use your ${hand} hand`,
+      text: `We keep seeing your ${other} hand. You told us you write with your ${hand} hand, so this study only counts your ${hand} hand, for every letter. Hold up your ${hand} hand. When we can see it, the button below will turn on.`,
+    };
+  },
 
   // The camera check says which hand to use: the instructions page is off
   // (config.js SCREENS.instructions), so this is where people learn it.
@@ -345,7 +376,14 @@ function applyEffects(effects, { trial, addEvent, endTrial }) {
       case "status": view.status(e.text); break;
       case "reward": view.reward(e.points); break;
       case "complete": view.complete(); break;
-      case "log": addEvent(e.event, e.data); if (e.event === "attempt") debug?.attempt(e.data); break;
+      case "log":
+        addEvent(e.event, e.data);
+        if (e.event === "attempt") {
+          debug?.attempt(e.data);
+          session.wrongStreak = nextWrongStreak(session.wrongStreak ?? 0, e.data);
+          if (session.wrongStreak >= WRONG_HAND_LIMIT && !session.handCheck) { session.handCheck = true; endTrial("wrong-hand"); }
+        }
+        break;
       case "end-trial": endTrial(e.reason); break;
       case "schedule-report": break;   // the study has no adaptive schedule
       default: console.warn(`asl-study: unknown effect ${e.kind}`);

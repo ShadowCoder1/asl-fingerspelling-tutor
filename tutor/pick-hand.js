@@ -64,3 +64,14 @@ export function createHandPicker(want) {
     return i;
   };
 }
+
+/* Which hand this is, by the engine's own rule (experiments/asl-tutor/engine.js):
+ * the geometry when it is clear, else MediaPipe's label, else unknown (null).
+ * Used to stop someone who is signing with the other hand (the camera check). */
+export function handSide(landmarks, label, aspect = 4 / 3) {
+  const c = chirality(pointsOf(landmarks, aspect));
+  if (Math.abs(c.margin) >= PICK_MARGIN) return c.sign === 1 ? "right" : "left";
+  if (/^r/i.test(label ?? "")) return "right";
+  if (/^l/i.test(label ?? "")) return "left";
+  return null;
+}
