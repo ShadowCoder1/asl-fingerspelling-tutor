@@ -120,6 +120,19 @@ export const POST_QUESTIONS = [
     required: true,
     options: ["They were wrong or confusing", "They did not help much", "They helped a bit", "They helped a lot", "I did not get any"] },
 
+  // 2026-09-28: what it was like, and what would make it more fun
+  { id: "experience",
+    label: "What was the task like for you?",
+    help: "What you liked, what you didn't, what felt easy or hard.",
+    type: "textarea",
+    required: true },
+
+  { id: "improve",
+    label: "What would make it more fun and engaging?",
+    help: "Anything you would change or add: the pace, the pictures, the feedback, rewards, games.",
+    type: "textarea",
+    required: true },
+
   { id: "comments",
     label: "Anything else? Problems with the camera, things that were unclear. (optional)",
     type: "textarea" },
