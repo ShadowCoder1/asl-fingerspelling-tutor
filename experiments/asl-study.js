@@ -41,6 +41,10 @@ const MODEL_PATH = "tutor/model.json";
 export const STUDY_VERSION = "asl-study/2";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
+/* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
+ * no pictures and no teaching -- a baseline of how the grader does on people who
+ * know the signs. ?mode=expert; an explicit ?reps= still wins, for trying it out. */
+export const EXPERT_REPS = Object.freeze({ pre: 0, teach: 0, post: 4 });
 /* JT, 2026-09-23: five letters, for a short demo. The five the grader is surest
  * of on data it never saw (research/allletters-2026-09-22, per_letter.py:
  * correct hands accepted 0.93-0.99, look-alikes 0.00-0.03), none a movement,
@@ -139,6 +143,8 @@ export function parseStudyLetters(raw) {
 }
 
 const params = new URLSearchParams(typeof location === "undefined" ? "" : location.search);
+const EXPERT = params.get("mode") === "expert";
+const repsFromUrl = () => (params.get("reps") !== null ? parseReps(params.get("reps")) : EXPERT ? { ...EXPERT_REPS } : { ...DEFAULT_REPS });
 const hintPolicy = parseHintPolicy(params.get("hints"));
 const debugOn = params.get("debug") === "1";
 
@@ -147,7 +153,7 @@ const debugOn = params.get("debug") === "1";
  * then reports the real complaint. */
 function plannedTrials() {
   try {
-    const r = parseReps(params.get("reps"));
+    const r = repsFromUrl();
     return parseStudyLetters(params.get("letters")).length * (r.pre + r.teach + r.post);
   } catch {
     return LETTERS.length * (DEFAULT_REPS.pre + DEFAULT_REPS.teach + DEFAULT_REPS.post);
@@ -199,7 +205,11 @@ export default {
     `Hold up your ${studyHand(demographics)} hand in front of the camera. Use only this hand for every letter. When we can see it clearly, the button below will turn on.`,
 
   // JT, 2026-09-23: this and a film of a few trials, nothing more.
-  instructions: ({ demographics } = {}) => `
+  instructions: ({ demographics } = {}) => EXPERT ? `
+    <p>Sign each letter the way you normally would. Every letter comes up four times, in a random order. There are no pictures.</p>
+    <p><strong>Please use your ${studyHand(demographics)} hand.</strong></p>
+    ${demoVideo(TEST_DEMO, "A short film of someone signing three letters")}
+    <p class="subtle">Make the sign, then hold your hand still until the circle fills.</p>` : `
     <p>We will first see which signs you already know.</p>
     <p><strong>Please use your ${studyHand(demographics)} hand.</strong></p>
     ${demoVideo(TEST_DEMO, "A short film of someone signing three letters")}
@@ -209,7 +219,7 @@ export default {
     let letters = LETTERS.slice(), reps = { ...DEFAULT_REPS };
     try {
       letters = parseStudyLetters(params.get("letters"));
-      reps = parseReps(params.get("reps"));
+      reps = repsFromUrl();
     } catch (err) {
       mountError = err;   // thrown from nextTrial, where the runner shows it
     }
@@ -331,6 +341,14 @@ export default {
     if (!letters.length) return `<p class="subtle">No graded letters in this session.</p>`;
     const pct = (a) => (a.length ? `${Math.round(100 * a.filter(Boolean).length / a.length)}%` : "—");
     const all = (k) => pct(letters.flatMap((l) => by[l][k]));
+    if (letters.every((l) => !by[l].pre.length)) {        // expert mode: the test only
+      return `<p>How often the model recognized each letter (it never told you during the task):</p>
+        <p><strong>All letters: ${all("post")}</strong></p>
+        <table class="results"><tr><th>letter</th><th>recognized</th></tr>
+        ${letters.map((l) => `<tr><th>${l}</th><td>${pct(by[l].post)}</td></tr>`).join("")}
+        </table>
+        <p class="subtle">Grading is approximate and based on public data — where you signed a letter correctly and it says otherwise, the model is wrong.</p>`;
+    }
     return `<p>Your letters before and after the learning part (the model's
         verdict, never shown during the checks; a letter made with the other
         hand counts as not right):</p>
@@ -361,7 +379,7 @@ function sessionRecord() {
   return {
     studyVersion: STUDY_VERSION, tutorVersion: TUTOR_VERSION, hintPolicy,
     letters: session.letters.join(""), reps: session.reps, seed: session.seed, seedSource: session.seedSource,
-    plannedTrials: session.plan.length, commitOptions: TUTOR_COMMIT_OPTS, debug: debugOn, hand: session.hand,
+    plannedTrials: session.plan.length, commitOptions: TUTOR_COMMIT_OPTS, debug: debugOn, hand: session.hand, mode: EXPERT ? "expert" : "study",
   };
 }
 
