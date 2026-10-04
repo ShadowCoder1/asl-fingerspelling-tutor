@@ -59,7 +59,7 @@ const MASTERY_STATES = {
  * camera, the letter with its ring, the picture -- no points, no letter map,
  * no standing notes (they are on the instructions page instead). Every id the
  * code looks up still exists, so nothing below has to know which layout it is. */
-export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "right" }) {
+export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "right", testLabel = null, testHelper = null }) {
   /* Two groups, so the stylesheet can put them where it likes: the PANEL (the
    * letter, what the tutor says, the reference picture) sits beside the camera
    * on a wide screen; the FOOT (points, the letter map, the standing notes)
@@ -202,10 +202,10 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
     cue({ letter, showPicture, pictureUrl, describe, mnemonic }) {
       nodes.cue.textContent = letter;
       // Copying a picture and recalling a shape are different jobs; say which.
-      nodes.label.textContent = showPicture ? "Copy this letter" : (layout === "study" ? "Make this letter" : "Sign this letter");
+      nodes.label.textContent = showPicture ? "Copy this letter" : testLabel ?? (layout === "study" ? "Make this letter" : "Sign this letter");
       nodes.feedback.textContent = "";
       nodes.feedback.className = "tutor-feedback";
-      helper = showPicture ? "Copy the picture, then hold your hand still." : "Make the shape, then hold your hand still.";
+      helper = showPicture ? "Copy the picture, then hold your hand still." : testHelper ?? "Make the shape, then hold your hand still.";
       decided = false;
       nodes.status.textContent = helper;
       setReference({ showPicture, pictureUrl, describe, mnemonic, letter });

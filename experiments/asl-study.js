@@ -38,13 +38,23 @@ import { createHandPicker, handSide } from "../tutor/pick-hand.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 
 const MODEL_PATH = "tutor/model.json";
-export const STUDY_VERSION = "asl-study/2";
+// 2.1 (2026-10-04): expert mode's own instructions page and "Fingerspell this
+// letter" (EXPERT_TEXT); the study itself is unchanged.
+export const STUDY_VERSION = "asl-study/2.1";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
  * no pictures and no teaching -- a baseline of how the grader does on people who
  * know the signs. ?mode=expert; an explicit ?reps= still wins, for trying it out. */
 export const EXPERT_REPS = Object.freeze({ pre: 0, teach: 0, post: 4 });
+/* What expert mode says (2026-10-04). Four Prolific "experts" saw only "Make
+ * this letter" (the instructions page is off for everyone, config.js), and one
+ * drew every letter in the air. So expert mode shows its own instructions page,
+ * and every trial asks for fingerspelling by name. */
+export const EXPERT_TEXT = Object.freeze({
+  label: "Fingerspell this letter",
+  helper: "Make the handshape, then hold it still.",
+});
 /* JT, 2026-09-23: five letters, for a short demo. The five the grader is surest
  * of on data it never saw (research/allletters-2026-09-22, per_letter.py:
  * correct hands accepted 0.93-0.99, look-alikes 0.00-0.03), none a movement,
@@ -184,6 +194,10 @@ export default {
 
   maxTrials: plannedTrials(),
 
+  // Expert mode always shows its instructions page (EXPERT_TEXT); otherwise
+  // config.js SCREENS.instructions decides, as before.
+  showInstructions: EXPERT ? true : null,
+
   // The camera check lets nobody past with the other hand, at the start or
   // when WRONG_HAND_LIMIT holds in a row were made with it.
   handProblem(res, k, { aspect, demographics }) {
@@ -206,10 +220,10 @@ export default {
 
   // JT, 2026-09-23: this and a film of a few trials, nothing more.
   instructions: ({ demographics } = {}) => EXPERT ? `
-    <p>Sign each letter the way you normally would. Every letter comes up four times, in a random order. There are no pictures.</p>
+    <p><strong>Fingerspell each letter with one hand, using the ASL alphabet handshapes.</strong> Do not draw the letter in the air.</p>
+    <p>Make the handshape, then hold it still until the circle fills. Every letter comes up four times, in a random order. You will not be told whether each one was right.</p>
     <p><strong>Please use your ${studyHand(demographics)} hand.</strong></p>
-    ${demoVideo(TEST_DEMO, "A short film of someone signing three letters")}
-    <p class="subtle">Make the sign, then hold your hand still until the circle fills.</p>` : `
+    ${demoVideo(TEST_DEMO, "A short film of someone fingerspelling three letters")}` : `
     <p>We will first see which signs you already know.</p>
     <p><strong>Please use your ${studyHand(demographics)} hand.</strong></p>
     ${demoVideo(TEST_DEMO, "A short film of someone signing three letters")}
@@ -233,7 +247,8 @@ export default {
       model: null, modelSha: null, engine: null, sessionLogged: false, replayExhausted: false,
       results: [],
     };
-    view = mountTutor(el, { letters, hintPolicy, layout: "study", hand: session.hand });
+    view = mountTutor(el, { letters, hintPolicy, layout: "study", hand: session.hand,
+      ...(EXPERT ? { testLabel: EXPERT_TEXT.label, testHelper: EXPERT_TEXT.helper } : {}) });
     if (debugOn) debug = createDebug(el, { getModel: () => session.model, canSave: !params.has("replay") });
   },
 

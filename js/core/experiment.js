@@ -278,8 +278,9 @@ async function run(exp) {
   // May be a function of the questionnaire answers (the study words its
   // instructions around the participant's dominant hand).
   // Off in config.js SCREENS.instructions: the task starts straight after the
-  // camera check.
-  if (SCREENS?.instructions !== false) {
+  // camera check. An experiment's own showInstructions (a boolean) wins: the
+  // study's expert mode has nothing else that says what to do.
+  if (typeof exp.showInstructions === "boolean" ? exp.showInstructions : SCREENS?.instructions !== false) {
     ui.setHtml("#instructions-text", (typeof exp.instructions === "function" ? exp.instructions({ demographics, participant }) : exp.instructions) ?? "");
     if (SPACE) ui.setText("#btn-start", SPACE_LABEL);
     ui.showScreen("screen-instructions");
