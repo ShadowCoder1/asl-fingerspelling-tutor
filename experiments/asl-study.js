@@ -30,7 +30,7 @@ import { loadModel } from "../tutor/verifier.js";
 import { LETTERS, pictureUrl } from "../tutor/letters.js";
 import { createPrng } from "../tutor/prng.js";
 import { TUTOR_VERSION } from "./asl-tutor/flow.js";
-import { createEngine, TUTOR_COMMIT_OPTS } from "./asl-tutor/engine.js";
+import { createEngine, TUTOR_COMMIT_OPTS, EXPERT_COMMIT_OPTS } from "./asl-tutor/engine.js";
 import { createDebug } from "./asl-tutor/debug.js";
 import { mountTutor } from "./asl-tutor/ui.js";
 import { drawLandmarks } from "../js/core/experiment.js";
@@ -40,7 +40,9 @@ import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 const MODEL_PATH = "tutor/model.json";
 // 2.1 (2026-10-04): expert mode's own instructions page and "Fingerspell this
 // letter" (EXPERT_TEXT); the study itself is unchanged.
-export const STUDY_VERSION = "asl-study/2.1";
+// 2.2 (2026-10-07): expert mode holds longer before a sign is graded
+// (EXPERT_COMMIT_OPTS: ring shown at 0.5 s, graded at 1.5 s); the study is unchanged.
+export const STUDY_VERSION = "asl-study/2.2";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
@@ -154,6 +156,9 @@ export function parseStudyLetters(raw) {
 
 const params = new URLSearchParams(typeof location === "undefined" ? "" : location.search);
 const EXPERT = params.get("mode") === "expert";
+/* The hold-still ring: expert mode's is longer (JT, 2026-10-07), the novice study keeps the tutor's. */
+export const commitOptsFor = (expert) => (expert ? EXPERT_COMMIT_OPTS : TUTOR_COMMIT_OPTS);
+const COMMIT_OPTS = commitOptsFor(EXPERT);
 const repsFromUrl = () => (params.get("reps") !== null ? parseReps(params.get("reps")) : EXPERT ? { ...EXPERT_REPS } : { ...DEFAULT_REPS });
 const hintPolicy = parseHintPolicy(params.get("hints"));
 const debugOn = params.get("debug") === "1";
@@ -338,6 +343,8 @@ export default {
       recorded: n((s) => s.finalOutcome === "recorded"),
       quizAccepted: n((s) => (s.kind === "pre" || s.kind === "post") && s.correct === true),
       taught: n((s) => s.kind === "teach" && s.finalOutcome === "intro-done"),
+      // the ring this session ran with, as saved with its data (expert mode's is longer)
+      ringMs: trialSummaries[0]?.study?.commitOptions?.holdMs ?? null,
     };
   },
 
@@ -385,7 +392,7 @@ async function loadEverything() {
     throw new Error(`Could not load the grading model from ${MODEL_PATH} (${err?.message || err}).`);
   }
   session.model = loadModel(JSON.parse(text));
-  session.engine = createEngine({ model: session.model, letters: session.letters, hintPolicy, gradeAll: true, hand: session.hand });
+  session.engine = createEngine({ model: session.model, letters: session.letters, hintPolicy, gradeAll: true, hand: session.hand, commitOpts: COMMIT_OPTS });
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   session.modelSha = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -394,7 +401,7 @@ function sessionRecord() {
   return {
     studyVersion: STUDY_VERSION, tutorVersion: TUTOR_VERSION, hintPolicy,
     letters: session.letters.join(""), reps: session.reps, seed: session.seed, seedSource: session.seedSource,
-    plannedTrials: session.plan.length, commitOptions: TUTOR_COMMIT_OPTS, debug: debugOn, hand: session.hand, mode: EXPERT ? "expert" : "study",
+    plannedTrials: session.plan.length, commitOptions: COMMIT_OPTS, debug: debugOn, hand: session.hand, mode: EXPERT ? "expert" : "study",
   };
 }
 

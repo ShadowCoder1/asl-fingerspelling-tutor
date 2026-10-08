@@ -101,6 +101,16 @@ export const TUTOR_COMMIT_OPTS = Object.freeze({
   ...COMMIT_DEFAULTS, holdMs: 900, settleMs: 300, stillPerFinger: true, stillTol: 0.10, stillAlign: true, placeTol: 1.0, heldOverPlace: Infinity, rearmAfterMs: 3500,
 });
 
+/* The study's expert mode (JT, 2026-10-07, for Karen's lab: lengthen both
+ * times). The ring shows after 0.5 s still and the sign is graded at 1.5 s,
+ * not 0.3 and 0.9, so a hand only pausing on its way is not graded. Everything
+ * else is the tutor's. On the real held letters of
+ * tests/fixtures/real-holds-ghana.json played at a third of real speed (holds
+ * of about 3.3 s, slow moves between them), the tutor's ring committed 5 times
+ * outside any held letter and this one none, and it still closed 20 of 22
+ * holds (tests/real-holds.test.js). */
+export const EXPERT_COMMIT_OPTS = Object.freeze({ ...TUTOR_COMMIT_OPTS, holdMs: 1500, settleMs: 500 });
+
 /* Two committed poses closer than this, as shapes (palm widths, tutor/commit.js
  * shapeDistance), are the same answer given twice. 0.15 is the committer's own
  * idea of "the hand has not changed" (rearmTol); a real correction -- a thumb
