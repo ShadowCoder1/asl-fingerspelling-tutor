@@ -675,7 +675,9 @@ async function run(exp) {
   }
   ui.showScreen("screen-done");
 
-  if (saving && STUDY.completionRedirectUrl) {
+  // Only people Prolific sent here go back to it: anyone else (a lab's own
+  // link, 2026-10-08) was landing on a Prolific login page after the results.
+  if (saving && STUDY.completionRedirectUrl && participant.prolific) {
     ui.setText("#done-redirect-note", "Returning you to Prolific in 5 seconds…");
     await ui.sleep(5000);
     location.href = STUDY.completionRedirectUrl;
