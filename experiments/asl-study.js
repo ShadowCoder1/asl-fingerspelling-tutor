@@ -27,6 +27,7 @@
 
 import { flattenRounded, DECIMALS } from "../tutor/landmarks.js";
 import { loadModel } from "../tutor/verifier.js";
+import { loadOpenFS } from "../tutor/openfs.js";
 import { LETTERS, pictureUrl } from "../tutor/letters.js";
 import { createPrng } from "../tutor/prng.js";
 import { TUTOR_VERSION } from "./asl-tutor/flow.js";
@@ -42,7 +43,9 @@ const MODEL_PATH = "tutor/model.json";
 // letter" (EXPERT_TEXT); the study itself is unchanged.
 // 2.2 (2026-10-07): expert mode holds longer before a sign is graded
 // (EXPERT_COMMIT_OPTS: ring shown at 0.5 s, graded at 1.5 s); the study is unchanged.
-export const STUDY_VERSION = "asl-study/2.2";
+// 2.3 (2026-10-16, JT): the new grader (tutor/mix.js: the P rule, the O/E rule and OpenFS's second opinion on
+// I M N X) on every link; ?grader=old grades with the previous one. Sessions record `grader`.
+export const STUDY_VERSION = "asl-study/2.3";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
@@ -68,6 +71,9 @@ export const DEMO_LETTERS = Object.freeze(["B", "D", "F", "I", "V"]);
  * asked to use ONE hand; "Left" means the left, anything else the right (the
  * pictures are drawn for a right hand, tutor/letters.js). */
 export function studyHand(demographics) {
+  // Model-mix test build: no questionnaire, so ?hand=left says which hand (right otherwise).
+  const fromUrl = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("hand");
+  if (fromUrl === "left" || fromUrl === "right") return fromUrl;
   return /^left/i.test(demographics?.dominantHand ?? "") ? "left" : "right";
 }
 const PHASES = ["pre", "teach", "post"];
@@ -162,6 +168,51 @@ const COMMIT_OPTS = commitOptsFor(EXPERT);
 const repsFromUrl = () => (params.get("reps") !== null ? parseReps(params.get("reps")) : EXPERT ? { ...EXPERT_REPS } : { ...DEFAULT_REPS });
 const hintPolicy = parseHintPolicy(params.get("hints"));
 const debugOn = params.get("debug") === "1";
+/* The grader (2026-10-16, JT: on every link): tutor/mix.js, the P rule, the O/E rule and OpenFS's second opinion on
+ * I M N X (research/combine-2026-10-16). ?grader=old grades with the previous grader alone. The test site (its
+ * index.html carries <meta name="grader-compare">, or ?compare=1) also shows each test sign's verdict next to the
+ * old grader's; participants never see that. */
+const GRADER = params.get("grader") === "old" ? "old" : "new";
+const COMPARE = params.get("compare") === "1"
+  || (typeof document !== "undefined" && document.querySelector('meta[name="grader-compare"]') !== null);
+const QUIZ_DWELL_MS = 2600;
+/* OpenFS's weights (16 MB) start downloading when the study mounts, behind the camera check and instructions; the
+ * first trial waits for them at most this long, then grades without the second opinion until they arrive. */
+const OPENFS_WAIT_MS = 10000;
+let openfsPromise = null;
+let openfsReady = null;
+function startOpenFS() {
+  if (GRADER !== "new" || openfsPromise) return openfsPromise;
+  const t0 = performance.now();
+  openfsPromise = loadOpenFS().then((o) => {
+    openfsReady = o;
+    if (session) session.openfsLoadMs = Math.round(performance.now() - t0);
+    return o;
+  }).catch((err) => {
+    // Grade anyway, without the second opinion, and say so where a tester will look.
+    if (session) session.openfsError = String(err?.message || err);
+    console.warn(`asl-study: OpenFS not loaded, grading without its second opinion (${err?.message || err})`);
+    return null;
+  });
+  return openfsPromise;
+}
+
+const shortWhy = (o) => (o.outcome === "accept" ? "" : o.reason === "tracking" ? "hand not fully in view"
+  : o.reason === "borderline" ? "too close to call" : o.rival && !o.rival.startsWith("_") ? `read as ${o.rival}` : "not a clear letter");
+
+/** One line under the letter after each test sign: the verdict, and where the new grader differs from the old. */
+export function quizText(v, letter) {
+  const ok = v.outcome === "accept";
+  if (!v.mix) return ok ? "✓ Recognized" : `✗ Not recognized (${shortWhy(v)})`;
+  const old = v.mix.old, oldOk = old.outcome === "accept";
+  const how = v.mix.by === "second-opinion" ? ` (OpenFS read ${letter}, ${Math.round(100 * v.mix.openfs.pTarget)}%)`
+    : v.mix.by === "p-rule" ? (ok ? " (fingers point up, so not P)" : " (P has to point down)")
+    : v.mix.by === "o-e-rule" ? (ok ? " (fingers curved round like an O, so not E)" : " (E folds the fingertips down to the knuckles)") : "";
+  if (ok && oldOk) return "✓ Recognized";
+  if (ok) return `✓ Recognized by the new grader${how}. Old grader: ✗ ${shortWhy(old)}`;
+  if (oldOk) return `✗ Not recognized${how}. Old grader: ✓`;
+  return `✗ Not recognized (${shortWhy(v)})${v.mix.openfs ? `. OpenFS read ${v.mix.openfs.top}` : ""}`;
+}
 
 /* The runner reads maxTrials before mount, for "Trial 3 of N": N is the plan's
  * length, known from the URL alone. A bad URL falls back to the default; mount
@@ -255,6 +306,7 @@ export default {
     view = mountTutor(el, { letters, hintPolicy, layout: "study", hand: session.hand,
       ...(EXPERT ? { testLabel: EXPERT_TEXT.label, testHelper: EXPERT_TEXT.helper } : {}) });
     if (debugOn) debug = createDebug(el, { getModel: () => session.model, canSave: !params.has("replay") });
+    startOpenFS();
   },
 
   async nextTrial(index) {
@@ -369,7 +421,8 @@ export default {
         <table class="results"><tr><th>letter</th><th>recognized</th></tr>
         ${letters.map((l) => `<tr><th>${l}</th><td>${pct(by[l].post)}</td></tr>`).join("")}
         </table>
-        <p class="subtle">Grading is approximate and based on public data — where you signed a letter correctly and it says otherwise, the model is wrong.</p>`;
+        <p class="subtle">Grading is approximate and based on public data — where you signed a letter correctly and it says otherwise, the model is wrong.
+        Handshapes are read with MediaPipe (Google) and OpenFS (KETI), used here for non-commercial research.</p>`;
     }
     return `<p>Your letters before and after the learning part (the model's
         verdict, never shown during the checks; a letter made with the other
@@ -378,7 +431,8 @@ export default {
       <table class="results"><tr><th>letter</th><th>before</th><th>after</th></tr>
       ${letters.map((l) => `<tr><th>${l}</th><td>${pct(by[l].pre)}</td><td>${pct(by[l].post)}</td></tr>`).join("")}
       </table>
-      <p class="subtle">Grading is approximate and based on public data — it can be wrong.</p>`;
+      <p class="subtle">Grading is approximate and based on public data — it can be wrong. Handshapes are read with
+      MediaPipe (Google) and OpenFS (KETI), used here for non-commercial research.</p>`;
   },
 };
 
@@ -392,7 +446,17 @@ async function loadEverything() {
     throw new Error(`Could not load the grading model from ${MODEL_PATH} (${err?.message || err}).`);
   }
   session.model = loadModel(JSON.parse(text));
-  session.engine = createEngine({ model: session.model, letters: session.letters, hintPolicy, gradeAll: true, hand: session.hand, commitOpts: COMMIT_OPTS });
+  if (GRADER === "new") {
+    let timer;
+    await Promise.race([startOpenFS(), new Promise((r) => { timer = setTimeout(r, OPENFS_WAIT_MS); })]);
+    clearTimeout(timer);
+    if (!openfsReady && !session.openfsError) console.warn("asl-study: OpenFS still loading; grading without its second opinion until it arrives");
+  }
+  session.engine = createEngine({
+    model: session.model, letters: session.letters, hintPolicy, gradeAll: true, hand: session.hand, commitOpts: COMMIT_OPTS,
+    mix: GRADER === "new" ? { getOpenFS: () => openfsReady } : null,
+    deps: COMPARE ? { quizText, quizDwellMs: QUIZ_DWELL_MS } : {},
+  });
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   session.modelSha = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -402,6 +466,7 @@ function sessionRecord() {
     studyVersion: STUDY_VERSION, tutorVersion: TUTOR_VERSION, hintPolicy,
     letters: session.letters.join(""), reps: session.reps, seed: session.seed, seedSource: session.seedSource,
     plannedTrials: session.plan.length, commitOptions: COMMIT_OPTS, debug: debugOn, hand: session.hand, mode: EXPERT ? "expert" : "study",
+    grader: GRADER, openfsError: session.openfsError ?? null, openfsLoadMs: session.openfsLoadMs ?? null,
   };
 }
 

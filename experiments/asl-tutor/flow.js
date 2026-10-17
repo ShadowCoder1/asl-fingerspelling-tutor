@@ -293,6 +293,8 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       rival: v.rival ?? null,
       tier: v.tier,
       tierIgnored: v.tierIgnored ?? false,
+      // tutor/mix.js only: what the old grader said and what changed it; null otherwise.
+      ...(v.mix ? { mix: v.mix } : {}),
       hintPolicy,
       // cue -> hold start, and hold start -> commit. The first is retrieval
       // (how long it took to remember the shape), the second is how long the
@@ -348,7 +350,7 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
       t.lastOutcome = v.outcome;
       // `complete` is the ring's burst: the hold was taken. It is the same
       // for a right and a wrong answer, so it says nothing about correctness.
-      return [log("attempt", base), { kind: "complete" }, say("Recorded.", "done"), ...end("recorded")];
+      return [log("attempt", base), { kind: "complete" }, say(deps.quizText ? deps.quizText(v, t.letter) : "Recorded.", "done"), ...end("recorded")];
     }
     if (t.kind === "teach" && !gradable(t.letter)) {
       t.lastOutcome = v.outcome;
@@ -728,7 +730,9 @@ export function createFlow({ model, letters, hintPolicy = "strict", maxAttempts 
   function end(reason) {
     t.ended = true;
     t.endReason = reason;
-    return [{ kind: "end-trial", reason, afterMs: END_DWELL_MS[reason] ?? 0 }];
+    // deps.quizDwellMs: a page that shows the quiz verdict (the model-mix test page) leaves it up long enough to read.
+    const ms = reason === "recorded" && deps.quizDwellMs ? deps.quizDwellMs : END_DWELL_MS[reason] ?? 0;
+    return [{ kind: "end-trial", reason, afterMs: ms }];
   }
 
   const holdOff = (ms) => ({ kind: "hold-off", ms });

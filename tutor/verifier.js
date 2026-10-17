@@ -372,10 +372,14 @@ export function decide(model, z, target, opts) {
   // The best of every OTHER class: the 23 other letters and the background
   // alike. Strictly greater, so a tie goes to the first in names order --
   // the same tie-break Python's argmax makes.
+  // opts.excludeRivals: classes that cannot be the rival for this hand (tutor/mix.js: P, when the middle finger
+  // points up). Absent, nothing changes.
+  const excluded = opts?.excludeRivals ?? null;
   let b = -1, impossible = false;
   for (let c = 0; c < llbuf.length; c++) {
     if (d2buf[c] < 0) impossible = true;
     if (c === t) continue;
+    if (excluded !== null && excluded.includes(model.names[c])) continue;
     if (b < 0 || llbuf[c] > llbuf[b]) b = c;
   }
   const best = model.names[b];

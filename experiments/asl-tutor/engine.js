@@ -27,6 +27,7 @@ import { featuresFromFlat } from "../../tutor/features.js";
 import { createCommitter, shapeDistance, DEFAULTS as COMMIT_DEFAULTS } from "../../tutor/commit.js";
 import { verify, standardize, scoreAll } from "../../tutor/verifier.js";
 import { createFlow } from "./flow.js";
+import { createMixedVerify, SECOND_OPINION } from "../../tutor/mix.js";
 import { MOTION_LETTERS, MOTION_HINTS, MOTION_DEFAULTS, motionVerdict, inShape } from "../../tutor/motion.js";
 
 /* Which hand made a hold. The geometry (tutor/hand-frame.js chirality) is
@@ -193,8 +194,13 @@ export function inspectFrame(model, { flat, aspect, videoHeight }, target) {
  * @param {object} [o.commitOpts]
  * @param {object} [o.deps]      passed to createFlow (tests stub the verifier)
  */
-export function createEngine({ model, letters, hintPolicy = "strict", commitOpts = TUTOR_COMMIT_OPTS, deps = {}, gradeAll = false, hand = null, motionParams = MOTION_DEFAULTS, holdOffMs = undefined }) {
+export function createEngine({ model, letters, hintPolicy = "strict", commitOpts = TUTOR_COMMIT_OPTS, deps = {}, gradeAll = false, hand = null, motionParams = MOTION_DEFAULTS, holdOffMs = undefined, mix = null }) {
   const committer = createCommitter(commitOpts);
+  /* mix ({ getOpenFS }): grade with tutor/mix.js. It needs the trial's tracked frames (OpenFS reads the whole
+   * clip) and the hold being graded, so the engine keeps both. */
+  let clip = [];         // { tMs, flat } of every tracked frame this trial, oldest first
+  let commitCtx = null;  // set only while flow.onCommit runs
+  if (mix) deps = { ...deps, verify: createMixedVerify({ verify, getOpenFS: mix.getOpenFS, getCommit: () => commitCtx }) };
   let recent = [];       // { tMs, flat, label } for the motion letters and the hand vote
   let flow = null;
   let lastGraded = null;   // the points of the last pose graded in THIS trial
@@ -238,6 +244,7 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
       committer.nextTrial();
       flow = createFlow({ model, letters, hintPolicy, deps, gradeAll, handName: hand, ...(holdOffMs ? { holdOffMs } : {}) });
       recent = [];
+      clip = [];
       pending = [];
       lastGraded = null;
       startPauses = 0;
@@ -257,6 +264,10 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
       if (flow === null) throw new Error("engine.frame: no trial has been started");
       const effects = [];
       recent.push({ tMs, flat, label: handedness });
+      if (mix && flat !== null && flat.every(Number.isFinite)) {
+        clip.push({ tMs, flat });
+        if (clip.length > 2 * SECOND_OPINION.maxFrames) clip = clip.slice(-SECOND_OPINION.maxFrames);
+      }
       while (recent.length && recent[0].tMs < tMs - motionParams.WINDOW_MS - 2000) recent.shift();
       if (queued.length) { route(queued, tMs, effects); queued = []; }
 
@@ -348,7 +359,12 @@ export function createEngine({ model, letters, hintPolicy = "strict", commitOpts
         const motion = MOTION_LETTERS.includes(letter)
           ? motionVerdict(letter, recent.filter((r) => r.tMs >= committed.tStart - motionParams.WINDOW_MS && r.tMs <= committed.tCommit), aspect, motionParams)
           : null;
-        route(flow.onCommit({ committed, x, quality, sign, samePose, motion, wrongHand }), tMs, effects);
+        commitCtx = mix ? { flat: committed.flat, aspect, tStart: committed.tStart, tCommit: committed.tCommit, clip } : null;
+        try {
+          route(flow.onCommit({ committed, x, quality, sign, samePose, motion, wrongHand }), tMs, effects);
+        } finally {
+          commitCtx = null;
+        }
       }
 
       flush(tMs, effects);
