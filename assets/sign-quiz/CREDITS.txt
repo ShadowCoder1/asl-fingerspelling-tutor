@@ -1,0 +1,2 @@
+Sign videos: PopSign ASL v1.0 (Starner et al., 2023), https://signdata.cc.gatech.edu/view/datasets/popsign_v1_0/,
+licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Clips were trimmed, scaled and re-encoded.

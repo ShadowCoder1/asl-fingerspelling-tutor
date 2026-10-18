@@ -37,6 +37,7 @@ import { mountTutor } from "./asl-tutor/ui.js";
 import { drawLandmarks } from "../js/core/experiment.js";
 import { createHandPicker, handSide } from "../tutor/pick-hand.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
+import { runSignQuiz } from "./sign-quiz.js";
 
 const MODEL_PATH = "tutor/model.json";
 // 2.1 (2026-10-04): expert mode's own instructions page and "Fingerspell this
@@ -45,7 +46,9 @@ const MODEL_PATH = "tutor/model.json";
 // (EXPERT_COMMIT_OPTS: ring shown at 0.5 s, graded at 1.5 s); the study is unchanged.
 // 2.3 (2026-10-16, JT): the new grader (tutor/mix.js: the P rule, the O/E rule and OpenFS's second opinion on
 // I M N X) on every link; ?grader=old grades with the previous one. Sessions record `grader`.
-export const STUDY_VERSION = "asl-study/2.3";
+// 2.4 (2026-10-18, JT): the Prolific expert link starts with an ASL check (experiments/sign-quiz.js): how they
+// describe their ASL, then ten everyday signs on video; only "fluent" + 8 of 10 go on. Sessions record `screening`.
+export const STUDY_VERSION = "asl-study/2.4";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
@@ -162,6 +165,13 @@ export function parseStudyLetters(raw) {
 
 const params = new URLSearchParams(typeof location === "undefined" ? "" : location.search);
 const EXPERT = params.get("mode") === "expert";
+/* The ASL check (JT, 2026-10-18) runs on the expert link for people Prolific sent; Karen's lab link (no Prolific id)
+ * goes straight on. ?quiz=1 turns it on for any link (to try it), ?quiz=0 off. */
+export function quizApplies(expert, participant, quizParam) {
+  if (quizParam === "0") return false;
+  if (quizParam === "1") return true;
+  return expert && participant?.source === "prolific";
+}
 /* The hold-still ring: expert mode's is longer (JT, 2026-10-07), the novice study keeps the tutor's. */
 export const commitOptsFor = (expert) => (expert ? EXPERT_COMMIT_OPTS : TUTOR_COMMIT_OPTS);
 const COMMIT_OPTS = commitOptsFor(EXPERT);
@@ -249,6 +259,12 @@ export default {
   },
 
   maxTrials: plannedTrials(),
+
+  // Before the camera (js/core/experiment.js, step 2b): the ASL check, when it applies, resolving with its record.
+  async screening({ participant, root, show, form }) {
+    if (!quizApplies(EXPERT, participant, params.get("quiz"))) return null;
+    return runSignQuiz({ seed: seedFromParticipant(participant?.participantId), root, show, form });
+  },
 
   // Expert mode always shows its instructions page (EXPERT_TEXT); otherwise
   // config.js SCREENS.instructions decides, as before.

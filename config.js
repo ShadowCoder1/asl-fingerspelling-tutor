@@ -61,6 +61,13 @@ export const STUDY = {
   // Leave as null to just show a thank-you screen with no redirect.
   completionRedirectUrl: "https://app.prolific.com/submissions/complete?cc=C1B2RP9Z",
 
+  // Where to send a Prolific participant who did not pass the screening (the
+  // ASL check on the expert link, experiments/sign-quiz.js), so they are paid
+  // for their time: Prolific's "screened out" completion code, e.g.
+  // https://app.prolific.com/submissions/complete?cc=XXXXXXXX. Null shows the
+  // thank-you screen with no redirect.
+  screenoutRedirectUrl: null,
+
 };
 
 

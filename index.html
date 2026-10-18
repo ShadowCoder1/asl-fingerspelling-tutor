@@ -91,6 +91,19 @@
     <button id="btn-demographics" class="primary">Continue</button>
   </section>
 
+  <!-- 2b. Screening, when the experiment has one (experiments/sign-quiz.js) -->
+  <section id="screen-screening" class="screen">
+    <div id="screening-body"></div>
+  </section>
+
+  <!-- 2c. The end for someone the screening did not let through ---------- -->
+  <section id="screen-screened-out" class="screen">
+    <h2>Thank you for your time</h2>
+    <p>This study is looking for people who are fluent in ASL, so this is where it ends for you.
+       Thank you for taking part.</p>
+    <p id="screened-out-redirect-note" class="subtle"></p>
+  </section>
+
   <!-- 3. Loading -------------------------------------------------------- -->
   <section id="screen-loading" class="screen visible">
     <div class="spinner"></div>

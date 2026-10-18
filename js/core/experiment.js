@@ -208,6 +208,27 @@ async function run(exp) {
   }
   const sessionId = fb.newSessionId();
 
+  /* ---- 2b. Screening (optional) ------------------------------------------
+   * An experiment may check, before the camera starts, that this person is who
+   * the study is for (asl-study: the ASL check on the Prolific expert link,
+   * experiments/sign-quiz.js). exp.screening() returns null when it does not
+   * apply, or a record with `passed`. Someone who does not pass is thanked and
+   * stops here: their questionnaire and answers are saved, nothing else is
+   * recorded, and the camera is never turned on. A replay is nobody, so it
+   * skips this. */
+  let screening = null;
+  if (!replayData && typeof exp.screening === "function") {
+    screening = await exp.screening({
+      participant, demographics,
+      root: ui.$("#screening-body"),
+      show: () => ui.showScreen("screen-screening"),
+      form: { renderForm, readForm, focusField },
+    });
+    if (screening && screening.passed === false) {
+      return screenedOut({ exp, participant, startedAt, consentRecord, demographics, screening, sessionId, saving });
+    }
+  }
+
   /* ---- 3. Camera + tracker --------------------------------------------- */
   let video, tracker;
   if (replayData) {
@@ -409,7 +430,7 @@ async function run(exp) {
       const meta = {
         experimentId: exp.id, trialId,
         trialSummary: trialSummaries[trialSummaries.length - 1],
-        ...(i === 0 ? { early: { participantId: participant.participantId, demographics, consent: consentRecord, startedAt } } : {}),
+        ...(i === 0 ? { early: { participantId: participant.participantId, demographics, consent: consentRecord, startedAt, ...(screening ? { screening } : {}) } } : {}),
       };
 
       if (trial.backgroundUpload) {
@@ -549,6 +570,8 @@ async function run(exp) {
     startedAt,
     consent: consentRecord,
     demographics,
+    // The ASL check's record, when the experiment ran one (step 2b).
+    ...(screening ? { screening } : {}),
     postQuestionnaire,
     trials: trialSummaries,
     // How trials were chosen: "list" for a fixed array (or a function that
@@ -681,6 +704,45 @@ async function run(exp) {
     ui.setText("#done-redirect-note", "Returning you to Prolific in 5 seconds…");
     await ui.sleep(5000);
     location.href = STUDY.completionRedirectUrl;
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * The end for someone the screening did not let through (step 2b): save what
+ * they answered, thank them, and send Prolific participants back with the
+ * screen-out code (config.js STUDY.screenoutRedirectUrl) so they are paid for
+ * their time. Nothing about whether they "passed" is shown.
+ * ---------------------------------------------------------------------- */
+async function screenedOut({ exp, participant, startedAt, consentRecord, demographics, screening, sessionId, saving }) {
+  if (saving) {
+    ui.showScreen("screen-saving");
+    ui.setText("#saving-text", "Saving…");
+  }
+  try {
+    await fb.saveSession(sessionId, {
+      experimentId: exp.id,
+      experimentTitle: exp.title,
+      participantId: participant.participantId,
+      participantSource: participant.source,
+      prolific: participant.prolific,
+      condition: participant.condition,
+      startedAt,
+      consent: consentRecord,
+      demographics,
+      screening,
+      screenedOut: true,
+      trials: [],
+      environment: getEnvironment(),
+      schemaVersion: 2,
+    });
+  } catch (err) {
+    console.error("The screened-out session could not be saved.", err);
+  }
+  ui.showScreen("screen-screened-out");
+  if (saving && STUDY.screenoutRedirectUrl && participant.prolific) {
+    ui.setText("#screened-out-redirect-note", "Returning you to Prolific in 5 seconds…");
+    await ui.sleep(5000);
+    location.href = STUDY.screenoutRedirectUrl;
   }
 }
 
