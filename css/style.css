@@ -333,3 +333,6 @@ pre.prose { white-space: pre-wrap; word-break: break-word; font-size: .88rem; ma
 .q-range input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .q-range output { min-width: 8.5em; text-align: right; font-weight: 700; }
 .q-range:has(input[data-touched="0"]) output { color: var(--subtle); font-weight: 600; }
+
+/* a section title inside a form (form.js type "heading") */
+.q-heading { font-size: 1.15rem; font-weight: 800; margin: 34px 0 4px; }

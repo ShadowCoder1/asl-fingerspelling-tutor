@@ -19,6 +19,21 @@ export function renderForm(container, questions, prefill = {}) {
       continue;
     }
 
+    // A section title between questions (and an optional note under it): nothing to answer.
+    if (q.type === "heading") {
+      const h = document.createElement("h3");
+      h.className = "q-heading";
+      h.textContent = q.label;
+      container.append(h);
+      if (q.help) {
+        const note = document.createElement("p");
+        note.className = "q-help";
+        note.textContent = q.help;
+        container.append(note);
+      }
+      continue;
+    }
+
     const field = document.createElement("div");
     field.className = "q";
     field.dataset.qid = q.id;
@@ -162,7 +177,7 @@ export function readForm(container, questions) {
   let firstError = null;
 
   for (const q of questions) {
-    if (!q?.id || !q?.label) continue;
+    if (!q?.id || !q?.label || q.type === "heading") continue;
 
     const value = readOne(q);
     const problem = validate(q, value);

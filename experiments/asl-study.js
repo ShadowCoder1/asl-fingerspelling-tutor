@@ -38,7 +38,7 @@ import { drawLandmarks } from "../js/core/experiment.js";
 import { createHandPicker, handSide } from "../tutor/pick-hand.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 import { runSignQuiz } from "./sign-quiz.js";
-import { EXPERT_DEMOGRAPHIC_QUESTIONS } from "../questions.js";
+import { EXPERT_DEMOGRAPHIC_QUESTIONS, EXPERT_POST_QUESTIONS } from "../questions.js";
 
 const MODEL_PATH = "tutor/model.json";
 // 2.1 (2026-10-04): expert mode's own instructions page and "Fingerspell this
@@ -52,13 +52,20 @@ const MODEL_PATH = "tutor/model.json";
 // 2.5 (2026-10-18, JT): expert mode asks its own questions (questions.js EXPERT_DEMOGRAPHIC_QUESTIONS: the ASL
 // question first, two answers; years of ASL on a 0-100 slider). On the Prolific expert link anyone not fluent stops
 // right after that page, and three signs answered after more than 30 s end the check.
-export const STUDY_VERSION = "asl-study/2.5";
+// 2.6 (2026-10-18, JT + Indranil): expert mode ends with one practice cycle (every letter once, with its picture and
+// the feedback learners get), after its four test rounds, then Indranil's optional usability questions
+// (questions.js EXPERT_POST_QUESTIONS).
+export const STUDY_VERSION = "asl-study/2.6";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
  * no pictures and no teaching -- a baseline of how the grader does on people who
  * know the signs. ?mode=expert; an explicit ?reps= still wins, for trying it out. */
-export const EXPERT_REPS = Object.freeze({ pre: 0, teach: 0, post: 4 });
+export const EXPERT_REPS = Object.freeze({ pre: 0, teach: 1, post: 4 });
+/* ...and then one practice cycle (JT + Indranil, 2026-10-18: "tag on 1 training cycle through all the letters", so
+ * experts experience the training part and can answer the usability questions). The tests stay kind "post", as in
+ * every earlier expert session; the practice comes after them. */
+export const EXPERT_PHASES = Object.freeze(["post", "teach"]);
 /* What expert mode says (2026-10-04). Four Prolific "experts" saw only "Make
  * this letter" (the instructions page is off for everyone, config.js), and one
  * drew every letter in the air. So expert mode shows its own instructions page,
@@ -83,7 +90,7 @@ export function studyHand(demographics) {
   if (fromUrl === "left" || fromUrl === "right") return fromUrl;
   return /^left/i.test(demographics?.dominantHand ?? "") ? "left" : "right";
 }
-const PHASES = ["pre", "teach", "post"];
+export const PHASES = Object.freeze(["pre", "teach", "post"]);
 
 /* A quiz trial that never gets a hold ends here, recorded as no answer; a
  * teaching trial gets the tutor's usual forty seconds. */
@@ -118,6 +125,17 @@ export const BREAKS = Object.freeze({
   },
 });
 
+/* Expert mode's break before its practice cycle (2026-10-18). */
+export const EXPERT_BREAKS = Object.freeze({
+  teach: {
+    restHeading: "Last part: the practice mode",
+    restHtml: `<p>Now you will see each letter once more, <strong>with its picture</strong>, the way a learner practises.
+      This time the platform tells you whether it recognized your handshape and, if not, what to change.</p>
+      <p>Please fingerspell each letter as you normally would. Afterwards there are a few optional questions about it.</p>`,
+    restButton: "Start",
+  },
+});
+
 /* The whole session, as a list, in order. Pure: same inputs, same list.
  * @param {string[]} letters
  * @param {{pre:number, teach:number, post:number}} reps
@@ -138,10 +156,10 @@ export function handProblem(landmarks, label, aspect, want) {
   return side && side !== want ? `That is your ${side} hand. Please hold up your ${want} hand.` : null;
 }
 
-export function buildPlan(letters, reps, seed) {
+export function buildPlan(letters, reps, seed, phases = PHASES) {
   const prng = createPrng(seed);
   const plan = [];
-  for (const phase of PHASES) {
+  for (const phase of phases) {
     for (let pass = 0; pass < reps[phase]; pass++) {
       for (const letter of prng.shuffle(letters)) plan.push({ letter, kind: phase, pass });
     }
@@ -273,6 +291,8 @@ export default {
   // Expert mode's own questions (JT, 2026-10-18): the ASL question first, years on a slider. The novice study keeps
   // questions.js DEMOGRAPHIC_QUESTIONS.
   demographicQuestions: EXPERT ? EXPERT_DEMOGRAPHIC_QUESTIONS : null,
+  // ...and its own questions at the end (Indranil, 2026-10-18), all optional.
+  postQuestions: EXPERT ? EXPERT_POST_QUESTIONS : null,
 
   // Expert mode always shows its instructions page (EXPERT_TEXT); otherwise
   // config.js SCREENS.instructions decides, as before.
@@ -302,6 +322,7 @@ export default {
   instructions: ({ demographics } = {}) => EXPERT ? `
     <p><strong>Fingerspell each letter with one hand, using the ASL alphabet handshapes.</strong> Do not draw the letter in the air.</p>
     <p>Make the handshape, then hold it still until the circle fills. Every letter comes up four times, in a random order. You will not be told whether each one was right.</p>
+    <p>At the end you will go through the alphabet once in the practice mode that learners use, with pictures and feedback.</p>
     <p><strong>Please use your ${studyHand(demographics)} hand.</strong></p>
     ${demoVideo(TEST_DEMO, "A short film of someone fingerspelling three letters")}` : `
     <p>We will first see which signs you already know.</p>
@@ -321,7 +342,7 @@ export default {
     const seed = urlSeed !== null && urlSeed !== "" && Number.isInteger(Number(urlSeed))
       ? Number(urlSeed) >>> 0 : seedFromParticipant(participant?.participantId);
 
-    const plan = buildPlan(letters, reps, seed);
+    const plan = buildPlan(letters, reps, seed, EXPERT ? EXPERT_PHASES : PHASES);
     session = {
       letters, reps, seed, seedSource: urlSeed ? "url" : "participantId", plan, hand: studyHand(demographics),
       model: null, modelSha: null, engine: null, sessionLogged: false, replayExhausted: false,
@@ -349,7 +370,7 @@ export default {
       durationSec: step.kind === "teach" ? TEACH_DURATION_SEC : QUIZ_DURATION_SEC,
       countdownSec: 0,
       skipRest: !lastOfPart,
-      ...(lastOfPart ? BREAKS[next.kind] : {}),
+      ...(lastOfPart ? (EXPERT ? EXPERT_BREAKS : BREAKS)[next.kind] : {}),
       backgroundUpload: true,
     };
   },

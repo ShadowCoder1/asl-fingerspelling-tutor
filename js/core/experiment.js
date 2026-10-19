@@ -544,13 +544,15 @@ async function run(exp) {
    * was specified on 2026-09-21 but the wiring never landed; the first
    * finished session (2026-09-23) went straight to "thank you". */
   let postQuestionnaire = {};
-  if (SCREENS?.postQuestions !== false && POST_QUESTIONS?.length) {
+  // An experiment may ask its own list here too (asl-study's expert link does).
+  const postQuestions = exp.postQuestions ?? POST_QUESTIONS;
+  if (SCREENS?.postQuestions !== false && postQuestions?.length) {
     const formEl = ui.$("#post-form");
-    renderForm(formEl, POST_QUESTIONS, {});
+    renderForm(formEl, postQuestions, {});
     ui.showScreen("screen-post");
     while (true) {
       await ui.waitForClick("#btn-post");
-      const { ok, values, firstError } = readForm(formEl, POST_QUESTIONS);
+      const { ok, values, firstError } = readForm(formEl, postQuestions);
       if (ok) { postQuestionnaire = values; break; }
       focusField(formEl, firstError);
     }

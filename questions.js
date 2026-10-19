@@ -35,6 +35,8 @@
  *      type: "textarea"   a larger box for a longer answer.
  *      type: "range"      a slider. Optional `min`, `max`, `step` and `unit`
  *                         (shown after the number). Unanswered until moved.
+ *      type: "heading"    not a question: a section title (label) and an
+ *                         optional note (help) between questions.
  *
  *  ---------------------------------------------------------------------------
  *  OPTIONAL SETTINGS ON ANY QUESTION
@@ -169,4 +171,37 @@ export const POST_QUESTIONS = [
     label: "Anything else? Problems with the camera, things that were unclear. (optional)",
     type: "textarea" },
 
+];
+
+/* The expert link's questions at the end (Indranil Nyamsuren, 2026-10-18; JT: experts do the test, then one practice
+ * cycle, then these). All optional (JT/Indranil: "optional or for bonus payment"). Indranil's wording, in his order
+ * and under his headings. */
+const openQ = (id, label) => ({ id, label, type: "textarea" });
+export const EXPERT_POST_QUESTIONS = [
+  { id: "intro", type: "heading", label: "Your feedback (optional)",
+    help: "These questions are optional, but your answers will help us design the next version for people learning fingerspelling. Answer as many as you like." },
+
+  { id: "hBackground", type: "heading", label: "Your background" },
+  openQ("learnedFingerspelling", "How did you learn to fingerspell?"),
+  openQ("fingerspellingObstacles", "What were the biggest obstacles you faced while trying to learn fingerspelling?"),
+
+  { id: "hUsability", type: "heading", label: "Using the platform" },
+  openQ("clearIntuitive", "What aspects of the platform were immediately clear or intuitive?"),
+  openQ("unsureNext", "Were there any moments when you were unsure what to do next?"),
+
+  { id: "hLetters", type: "heading", label: "Recognizing letters" },
+  openQ("inaccurateLetters", "Did you notice letters that were represented inaccurately?"),
+  openQ("recognizedConsistently", "Did the platform appear to recognize correctly produced letters consistently?"),
+  openQ("wrongAcceptReject", "Were there instances when you thought an incorrect response was accepted, or a correct response was rejected?"),
+
+  { id: "hBeginners", type: "heading", label: "Sharing with beginners" },
+  openQ("trustAssessment", "Would you trust this platform’s assessment of fingerspelling ability? Why or why not?"),
+  openQ("helpfulForLearners", "In what ways might this platform be helpful for someone learning fingerspelling?"),
+  openQ("confusingForLearners", "In what ways might this platform be confusing for someone learning fingerspelling?"),
+  openQ("teachingUse", "If you were teaching someone fingerspelling, how would you use this platform in your instruction?"),
+
+  { id: "hFeedback", type: "heading", label: "The feedback in the practice part" },
+  openQ("feedbackClarity", "How clear was the feedback provided after each response?"),
+  openQ("feedbackUnderstanding", "Did the feedback help you understand what was correct or incorrect?"),
+  openQ("recommendLikelihood", "How likely would you be to recommend this platform to someone learning fingerspelling? Why?"),
 ];
