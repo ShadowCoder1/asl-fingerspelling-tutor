@@ -321,3 +321,15 @@ pre.prose { white-space: pre-wrap; word-break: break-word; font-size: .88rem; ma
 .sign-quiz-option:disabled { opacity: .6; cursor: default; }
 .sign-quiz-credit { margin-top: 18px; font-size: .78rem; }
 #sign-quiz-start { margin-top: 18px; }
+
+/* a slider question (form.js type "range"): a plain track and a round thumb, the same in every browser; grey until
+ * moved, so the starting position does not read as an answer */
+.q-range { display: flex; align-items: center; gap: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.q-range input[type="range"] { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: var(--soft); border: 1px solid var(--line); cursor: pointer; }
+.q-range input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-ink); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(35, 32, 27, .35); }
+.q-range input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--accent-ink); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(35, 32, 27, .35); }
+.q-range input[type="range"][data-touched="0"]::-webkit-slider-thumb { background: #c9c2b6; }
+.q-range input[type="range"][data-touched="0"]::-moz-range-thumb { background: #c9c2b6; }
+.q-range input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.q-range output { min-width: 8.5em; text-align: right; font-weight: 700; }
+.q-range:has(input[data-touched="0"]) output { color: var(--subtle); font-weight: 600; }

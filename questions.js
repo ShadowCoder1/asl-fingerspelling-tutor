@@ -33,6 +33,8 @@
  *      type: "number"     a number box. Optional `min` and `max`.
  *      type: "text"       a single line of text.
  *      type: "textarea"   a larger box for a longer answer.
+ *      type: "range"      a slider. Optional `min`, `max`, `step` and `unit`
+ *                         (shown after the number). Unanswered until moved.
  *
  *  ---------------------------------------------------------------------------
  *  OPTIONAL SETTINGS ON ANY QUESTION
@@ -94,6 +96,36 @@ export const DEMOGRAPHIC_QUESTIONS = [
     required: true,
     options: ["Right", "Left"] },
 
+];
+
+/* The expert link's questions (?mode=expert; JT, 2026-10-18). The ASL question
+ * comes first and has two answers: on the Prolific expert link, anyone who does
+ * not say fluent is thanked and stops there (experiments/asl-study.js,
+ * screening). Years of ASL is a number on a slider, 0 to 100. Both have new ids
+ * (aslFluency, aslYearsNumber), so they are never pooled with the novice
+ * study's year categories (aslYears). */
+export const ASL_FLUENT = "Fluent: I can talk about anything in ASL comfortably";
+const asked = (id) => DEMOGRAPHIC_QUESTIONS.find((q) => q.id === id);
+export const EXPERT_DEMOGRAPHIC_QUESTIONS = [
+  { id: "aslFluency",
+    label: "How would you describe your ASL?",
+    type: "radio",
+    required: true,
+    options: ["I do not use ASL", ASL_FLUENT] },
+
+  { id: "aslYearsNumber",
+    label: "How many years have you used American Sign Language (ASL)?",
+    help: "Drag the slider. Count classes, apps and everyday use. Other sign languages (for example BSL) do not count here.",
+    type: "range",
+    required: true,
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "years" },
+
+  asked("age"),
+  asked("sexAtBirth"),
+  asked("dominantHand"),
 ];
 
 /* =============================================================================

@@ -164,12 +164,14 @@ async function run(exp) {
   /* ---- 2. Demographics ---------------------------------------------------
    * Built from questions.js. Edit that file to change what is asked. */
   let demographics = {};
-  if (SCREENS?.demographics !== false && DEMOGRAPHIC_QUESTIONS.length) {
+  // An experiment may ask its own list instead (asl-study's expert link does).
+  const demographicQuestions = exp.demographicQuestions ?? DEMOGRAPHIC_QUESTIONS;
+  if (SCREENS?.demographics !== false && demographicQuestions.length) {
     const formEl = ui.$("#demographics-form");
     // (A "Your Prolific ID" box for links that arrived without one was asked
     // here during the Prolific runs; removed 2026-09-28 before sharing the
     // link with other researchers.)
-    const questions = DEMOGRAPHIC_QUESTIONS;
+    const questions = demographicQuestions;
     renderForm(formEl, questions, {});
     ui.showScreen("screen-demographics");
 

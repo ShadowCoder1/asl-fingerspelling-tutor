@@ -95,6 +95,39 @@ function buildInput(q, value) {
       return el;
     }
 
+    case "range": {
+      // A slider has a value from the start, so it would always look answered.
+      // It counts as unanswered until the participant moves it (data-touched),
+      // and says so beside it; the value is never a default nobody chose.
+      const wrap = document.createElement("div");
+      wrap.className = "q-range";
+      const el = document.createElement("input");
+      el.type = "range";
+      el.id = name;
+      el.min = q.min ?? 0;
+      el.max = q.max ?? 100;
+      el.step = q.step ?? 1;
+      const out = document.createElement("output");
+      out.htmlFor = name;
+      const show = () => { out.textContent = el.dataset.touched === "1" ? `${el.value}${q.unit ? ` ${q.unit}` : ""}` : "Drag to answer"; };
+      if (value != null) { el.value = value; el.dataset.touched = "1"; } else { el.dataset.touched = "0"; }
+      // "input" while dragging, "change" when let go (and from the keyboard): either one is an answer.
+      const touch = () => {
+        el.dataset.touched = "1";
+        show();
+        // answered now: clear an earlier "Please answer this question."
+        const field = el.closest(".q");
+        field?.classList.remove("bad-field");
+        const err = field?.querySelector(".q-error");
+        if (err) err.hidden = true;
+      };
+      el.addEventListener("input", touch);
+      el.addEventListener("change", touch);
+      show();
+      wrap.append(el, out);
+      return wrap;
+    }
+
     case "number": {
       const el = document.createElement("input");
       el.type = "number";
@@ -166,6 +199,7 @@ function readOne(q) {
 
   const el = document.getElementById(name);
   if (!el) return "";
+  if (q.type === "range") return el.dataset.touched === "1" ? Number(el.value) : "";
   const raw = el.value.trim();
   if (q.type === "number") return raw === "" ? "" : Number(raw);
   return raw;
@@ -179,7 +213,7 @@ function validate(q, value) {
   if (empty) return null;
 
   if (q.pattern && !new RegExp(q.pattern).test(String(value).trim())) return q.patternMessage ?? "Please check this answer.";
-  if (q.type === "number") {
+  if (q.type === "number" || q.type === "range") {
     if (!Number.isFinite(value)) return "Please enter a number.";
     if (q.min != null && value < q.min) return `Please enter ${q.min} or more.`;
     if (q.max != null && value > q.max) return `Please enter ${q.max} or less.`;

@@ -38,6 +38,7 @@ import { drawLandmarks } from "../js/core/experiment.js";
 import { createHandPicker, handSide } from "../tutor/pick-hand.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 import { runSignQuiz } from "./sign-quiz.js";
+import { EXPERT_DEMOGRAPHIC_QUESTIONS } from "../questions.js";
 
 const MODEL_PATH = "tutor/model.json";
 // 2.1 (2026-10-04): expert mode's own instructions page and "Fingerspell this
@@ -48,7 +49,10 @@ const MODEL_PATH = "tutor/model.json";
 // I M N X) on every link; ?grader=old grades with the previous one. Sessions record `grader`.
 // 2.4 (2026-10-18, JT): the Prolific expert link starts with an ASL check (experiments/sign-quiz.js): how they
 // describe their ASL, then ten everyday signs on video; only "fluent" + 8 of 10 go on. Sessions record `screening`.
-export const STUDY_VERSION = "asl-study/2.4";
+// 2.5 (2026-10-18, JT): expert mode asks its own questions (questions.js EXPERT_DEMOGRAPHIC_QUESTIONS: the ASL
+// question first, two answers; years of ASL on a 0-100 slider). On the Prolific expert link anyone not fluent stops
+// right after that page, and three signs answered after more than 30 s end the check.
+export const STUDY_VERSION = "asl-study/2.5";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
@@ -261,10 +265,14 @@ export default {
   maxTrials: plannedTrials(),
 
   // Before the camera (js/core/experiment.js, step 2b): the ASL check, when it applies, resolving with its record.
-  async screening({ participant, root, show, form }) {
+  async screening({ participant, demographics, root, show }) {
     if (!quizApplies(EXPERT, participant, params.get("quiz"))) return null;
-    return runSignQuiz({ seed: seedFromParticipant(participant?.participantId), root, show, form });
+    return runSignQuiz({ seed: seedFromParticipant(participant?.participantId), fluency: demographics?.aslFluency, root, show });
   },
+
+  // Expert mode's own questions (JT, 2026-10-18): the ASL question first, years on a slider. The novice study keeps
+  // questions.js DEMOGRAPHIC_QUESTIONS.
+  demographicQuestions: EXPERT ? EXPERT_DEMOGRAPHIC_QUESTIONS : null,
 
   // Expert mode always shows its instructions page (EXPERT_TEXT); otherwise
   // config.js SCREENS.instructions decides, as before.

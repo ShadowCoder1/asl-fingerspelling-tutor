@@ -344,6 +344,13 @@ function answerEverything(screen) {
     const option = [...select.options].find((o) => !o.disabled && o.value !== "");
     if (option) { select.value = option.value; fire(select); }
   }
+  for (const slider of screen.querySelectorAll('input[type="range"]')) {
+    // A slider counts as unanswered until it is moved (js/core/form.js, the
+    // expert link's years of ASL): move it, to its smallest value.
+    if (slider.dataset.touched === "1") continue;
+    slider.value = slider.min || "0";
+    fire(slider);
+  }
   for (const field of screen.querySelectorAll('input[type="text"], input[type="number"], textarea')) {
     if (field.value !== "") continue;
     // A number question usually has a minimum (age starts at 18), and the
