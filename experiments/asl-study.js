@@ -38,7 +38,7 @@ import { drawLandmarks } from "../js/core/experiment.js";
 import { createHandPicker, handSide } from "../tutor/pick-hand.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 import { runSignQuiz } from "./sign-quiz.js";
-import { EXPERT_DEMOGRAPHIC_QUESTIONS, EXPERT_POST_QUESTIONS } from "../questions.js";
+import { EXPERT_DEMOGRAPHIC_QUESTIONS, EXPERT_POST_QUESTIONS, EXPERT_POST_QUESTIONS_REQUIRED } from "../questions.js";
 
 const MODEL_PATH = "tutor/model.json";
 // 2.1 (2026-10-04): expert mode's own instructions page and "Fingerspell this
@@ -55,7 +55,9 @@ const MODEL_PATH = "tutor/model.json";
 // 2.6 (2026-10-18, JT + Indranil): expert mode ends with one practice cycle (every letter once, with its picture and
 // the feedback learners get), after its four test rounds, then Indranil's optional usability questions
 // (questions.js EXPERT_POST_QUESTIONS).
-export const STUDY_VERSION = "asl-study/2.6";
+// 2.7 (2026-10-18): on a Prolific link those questions are required (questions.js EXPERT_POST_QUESTIONS_REQUIRED), so
+// nobody reaches the completion code without answering them.
+export const STUDY_VERSION = "asl-study/2.7";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
@@ -131,7 +133,7 @@ export const EXPERT_BREAKS = Object.freeze({
     restHeading: "Last part: the practice mode",
     restHtml: `<p>Now you will see each letter once more, <strong>with its picture</strong>, the way a learner practises.
       This time the platform tells you whether it recognized your handshape and, if not, what to change.</p>
-      <p>Please fingerspell each letter as you normally would. Afterwards there are a few optional questions about it.</p>`,
+      <p>Please fingerspell each letter as you normally would. Afterwards there are a few questions about it.</p>`,
     restButton: "Start",
   },
 });
@@ -189,6 +191,10 @@ const params = new URLSearchParams(typeof location === "undefined" ? "" : locati
 const EXPERT = params.get("mode") === "expert";
 /* The ASL check (JT, 2026-10-18) runs on the expert link for people Prolific sent; Karen's lab link (no Prolific id)
  * goes straight on. ?quiz=1 turns it on for any link (to try it), ?quiz=0 off. */
+export function expertPostQuestions(expert, fromProlific) {
+  if (!expert) return null;
+  return fromProlific ? EXPERT_POST_QUESTIONS_REQUIRED : EXPERT_POST_QUESTIONS;
+}
 export function quizApplies(expert, participant, quizParam) {
   if (quizParam === "0") return false;
   if (quizParam === "1") return true;
@@ -291,8 +297,9 @@ export default {
   // Expert mode's own questions (JT, 2026-10-18): the ASL question first, years on a slider. The novice study keeps
   // questions.js DEMOGRAPHIC_QUESTIONS.
   demographicQuestions: EXPERT ? EXPERT_DEMOGRAPHIC_QUESTIONS : null,
-  // ...and its own questions at the end (Indranil, 2026-10-18), all optional.
-  postQuestions: EXPERT ? EXPERT_POST_QUESTIONS : null,
+  // ...and its own questions at the end (Indranil, 2026-10-18): required on a Prolific link (the completion code comes
+  // after them), optional otherwise.
+  postQuestions: expertPostQuestions(EXPERT, params.has("PROLIFIC_PID")),
 
   // Expert mode always shows its instructions page (EXPERT_TEXT); otherwise
   // config.js SCREENS.instructions decides, as before.

@@ -205,3 +205,11 @@ export const EXPERT_POST_QUESTIONS = [
   openQ("feedbackUnderstanding", "Did the feedback help you understand what was correct or incorrect?"),
   openQ("recommendLikelihood", "How likely would you be to recommend this platform to someone learning fingerspelling? Why?"),
 ];
+
+/* The same questions, all required, for people Prolific sent (2026-10-18): the completion code comes only after the
+ * last page, so it comes only once every answer is in. Karen's lab link keeps them optional. */
+export const EXPERT_POST_QUESTIONS_REQUIRED = EXPERT_POST_QUESTIONS.map((q) =>
+  q.type !== "heading" ? { ...q, required: true }
+    : q.id === "intro" ? { ...q, label: "Your feedback", help: "Please answer each question. A sentence or two is enough; your answers will help us design the next version for people learning fingerspelling." }
+    : q);
+
