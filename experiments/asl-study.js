@@ -38,7 +38,8 @@ import { drawLandmarks } from "../js/core/experiment.js";
 import { createHandPicker, handSide } from "../tutor/pick-hand.js";
 import { seedFromParticipant, parseHintPolicy } from "./asl-tutor.js";
 import { runSignQuiz } from "./sign-quiz.js";
-import { EXPERT_DEMOGRAPHIC_QUESTIONS, EXPERT_POST_QUESTIONS, EXPERT_POST_QUESTIONS_REQUIRED } from "../questions.js";
+import { EXPERT_DEMOGRAPHIC_QUESTIONS, EXPERT_POST_QUESTIONS, EXPERT_POST_QUESTIONS_REQUIRED,
+  EXPERT_PRETASK_QUESTIONS, EXPERT_PRETASK_QUESTIONS_REQUIRED } from "../questions.js";
 
 const MODEL_PATH = "tutor/model.json";
 // 2.1 (2026-10-04): expert mode's own instructions page and "Fingerspell this
@@ -57,7 +58,10 @@ const MODEL_PATH = "tutor/model.json";
 // (questions.js EXPERT_POST_QUESTIONS).
 // 2.7 (2026-10-18): on a Prolific link those questions are required (questions.js EXPERT_POST_QUESTIONS_REQUIRED), so
 // nobody reaches the completion code without answering them.
-export const STUDY_VERSION = "asl-study/2.7";
+// 2.8 (2026-10-18, Indranil): how they learned to fingerspell and its obstacles are asked BEFORE the task (after the
+// ASL check; sessions record `preTaskQuestionnaire`), and the screen before the practice asks them to think of
+// themselves, and anyone they know, first learning fingerspelling.
+export const STUDY_VERSION = "asl-study/2.8";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
@@ -131,9 +135,13 @@ export const BREAKS = Object.freeze({
 export const EXPERT_BREAKS = Object.freeze({
   teach: {
     restHeading: "Last part: the practice mode",
-    restHtml: `<p>Now you will see each letter once more, <strong>with its picture</strong>, the way a learner practises.
-      This time the platform tells you whether it recognized your handshape and, if not, what to change.</p>
-      <p>Please fingerspell each letter as you normally would. Afterwards there are a few questions about it.</p>`,
+    // Indranil's words (2026-10-18), to set them watching the teaching
+    restHtml: `<p><strong>You are about to see a prototype for teaching fingerspelling to novices.</strong> While interacting
+      with the platform, try to think of yourself when you were first learning fingerspelling, and of anyone else in your
+      life who has tried to learn fingerspelling.</p>
+      <p>You will see each letter once more, with its picture, the way a learner practises. The platform tells you whether
+      it recognized your handshape and, if not, what to change. Please fingerspell each letter as you normally would.
+      Afterwards there are a few questions about it.</p>`,
     restButton: "Start",
   },
 });
@@ -194,6 +202,10 @@ const EXPERT = params.get("mode") === "expert";
 export function expertPostQuestions(expert, fromProlific) {
   if (!expert) return null;
   return fromProlific ? EXPERT_POST_QUESTIONS_REQUIRED : EXPERT_POST_QUESTIONS;
+}
+export function expertPreTaskQuestions(expert, fromProlific) {
+  if (!expert) return null;
+  return fromProlific ? EXPERT_PRETASK_QUESTIONS_REQUIRED : EXPERT_PRETASK_QUESTIONS;
 }
 export function quizApplies(expert, participant, quizParam) {
   if (quizParam === "0") return false;
@@ -300,6 +312,8 @@ export default {
   // ...and its own questions at the end (Indranil, 2026-10-18): required on a Prolific link (the completion code comes
   // after them), optional otherwise.
   postQuestions: expertPostQuestions(EXPERT, params.has("PROLIFIC_PID")),
+  // ...and two before the task (Indranil, 2026-10-18), same rule.
+  preTaskQuestions: expertPreTaskQuestions(EXPERT, params.has("PROLIFIC_PID")),
 
   // Expert mode always shows its instructions page (EXPERT_TEXT); otherwise
   // config.js SCREENS.instructions decides, as before.

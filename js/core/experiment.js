@@ -231,6 +231,25 @@ async function run(exp) {
     }
   }
 
+  /* ---- 2c. Questions before the task (optional) -------------------------
+   * An experiment may ask a few questions after the screening and before the
+   * camera (asl-study's expert link: how they learned to fingerspell, to set
+   * them thinking about learning before they see the tutor). Saved under
+   * `preTaskQuestionnaire`. */
+  let preTaskQuestionnaire = null;
+  const preTaskQuestions = exp.preTaskQuestions ?? [];
+  if (preTaskQuestions.length) {
+    const formEl = ui.$("#pretask-form");
+    renderForm(formEl, preTaskQuestions, {});
+    ui.showScreen("screen-pretask");
+    while (true) {
+      await ui.waitForClick("#btn-pretask");
+      const { ok, values, firstError } = readForm(formEl, preTaskQuestions);
+      if (ok) { preTaskQuestionnaire = values; break; }
+      focusField(formEl, firstError);
+    }
+  }
+
   /* ---- 3. Camera + tracker --------------------------------------------- */
   let video, tracker;
   if (replayData) {
@@ -432,7 +451,7 @@ async function run(exp) {
       const meta = {
         experimentId: exp.id, trialId,
         trialSummary: trialSummaries[trialSummaries.length - 1],
-        ...(i === 0 ? { early: { participantId: participant.participantId, demographics, consent: consentRecord, startedAt, ...(screening ? { screening } : {}) } } : {}),
+        ...(i === 0 ? { early: { participantId: participant.participantId, demographics, consent: consentRecord, startedAt, ...(screening ? { screening } : {}), ...(preTaskQuestionnaire ? { preTaskQuestionnaire } : {}) } } : {}),
       };
 
       if (trial.backgroundUpload) {
@@ -576,6 +595,8 @@ async function run(exp) {
     demographics,
     // The ASL check's record, when the experiment ran one (step 2b).
     ...(screening ? { screening } : {}),
+    // Answers asked before the task, when the experiment asks any (step 2c).
+    ...(preTaskQuestionnaire ? { preTaskQuestionnaire } : {}),
     postQuestionnaire,
     trials: trialSummaries,
     // How trials were chosen: "list" for a fixed array (or a function that

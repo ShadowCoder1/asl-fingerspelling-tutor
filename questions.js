@@ -181,10 +181,6 @@ export const EXPERT_POST_QUESTIONS = [
   { id: "intro", type: "heading", label: "Your feedback (optional)",
     help: "These questions are optional, but your answers will help us design the next version for people learning fingerspelling. Answer as many as you like." },
 
-  { id: "hBackground", type: "heading", label: "Your background" },
-  openQ("learnedFingerspelling", "How did you learn to fingerspell?"),
-  openQ("fingerspellingObstacles", "What were the biggest obstacles you faced while trying to learn fingerspelling?"),
-
   { id: "hUsability", type: "heading", label: "Using the platform" },
   openQ("clearIntuitive", "What aspects of the platform were immediately clear or intuitive?"),
   openQ("unsureNext", "Were there any moments when you were unsure what to do next?"),
@@ -205,6 +201,16 @@ export const EXPERT_POST_QUESTIONS = [
   openQ("feedbackUnderstanding", "Did the feedback help you understand what was correct or incorrect?"),
   openQ("recommendLikelihood", "How likely would you be to recommend this platform to someone learning fingerspelling? Why?"),
 ];
+
+/* Asked BEFORE the task on the expert link (Indranil, 2026-10-18: "we kind of want to prime them to think about their
+ * learning journey at the start"): after the ASL check, before the camera. Moved here from the questions at the end. */
+export const EXPERT_PRETASK_QUESTIONS = [
+  { id: "hBackground", type: "heading", label: "Your background",
+    help: "Think back to when you were first learning to fingerspell." },
+  openQ("learnedFingerspelling", "How did you learn to fingerspell?"),
+  openQ("fingerspellingObstacles", "What were the biggest obstacles you faced while trying to learn fingerspelling?"),
+];
+export const EXPERT_PRETASK_QUESTIONS_REQUIRED = EXPERT_PRETASK_QUESTIONS.map((q) => (q.type !== "heading" ? { ...q, required: true } : q));
 
 /* The same questions, all required, for people Prolific sent (2026-10-18): the completion code comes only after the
  * last page, so it comes only once every answer is in. Karen's lab link keeps them optional. */
