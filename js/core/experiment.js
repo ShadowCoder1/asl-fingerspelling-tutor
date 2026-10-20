@@ -390,6 +390,7 @@ async function run(exp) {
   // later one is fetched at the bottom of the loop body, one trial ahead of
   // where the loop is (see the "look ahead" comment below for why).
   let i = 0;
+  let stoppedEarly = null;
   let trial = await trialSource.next(trialSummaries);
 
   while (trial) {
@@ -496,6 +497,12 @@ async function run(exp) {
      * one. For a fixed trials array this simply asks for trials[i+1], which is
      * already known, so it changes nothing about the order or timing of what
      * an array-based experiment does. */
+    /* The experiment may end the task here (asl-study's expert link: too many
+     * signs wrong for someone fluent). What was done is kept and saved below,
+     * and the person leaves the way a screened-out one does. */
+    stoppedEarly = exp.stopEarly?.(trialSummaries) ?? null;
+    if (stoppedEarly) break;
+
     /* The experiment can ask for the camera check again between trials (the
      * ASL study: several holds in a row with the other hand). Not in a replay:
      * there is no one to hold anything up. */
@@ -565,7 +572,7 @@ async function run(exp) {
   let postQuestionnaire = {};
   // An experiment may ask its own list here too (asl-study's expert link does).
   const postQuestions = exp.postQuestions ?? POST_QUESTIONS;
-  if (SCREENS?.postQuestions !== false && postQuestions?.length) {
+  if (!stoppedEarly && SCREENS?.postQuestions !== false && postQuestions?.length) {
     const formEl = ui.$("#post-form");
     renderForm(formEl, postQuestions, {});
     ui.showScreen("screen-post");
@@ -598,6 +605,8 @@ async function run(exp) {
     // Answers asked before the task, when the experiment asks any (step 2c).
     ...(preTaskQuestionnaire ? { preTaskQuestionnaire } : {}),
     postQuestionnaire,
+    // Stopped by the experiment before the end (step 6): what was done, and why.
+    ...(stoppedEarly ? { screenedOut: true, stoppedEarly } : {}),
     trials: trialSummaries,
     // How trials were chosen: "list" for a fixed array (or a function that
     // built one), "nextTrial" for an experiment that decided each trial as it
@@ -719,7 +728,18 @@ async function run(exp) {
         summary: scalarsOnly(experimentSummaries[i]),
       })),
       uploadErrors: uploadErrors.length,
+      ...(stoppedEarly ? { stoppedEarly } : {}),
     });
+  }
+  // Stopped early: the screened-out page and the screen-out code, not the results.
+  if (stoppedEarly) {
+    ui.showScreen("screen-screened-out");
+    if (saving && STUDY.screenoutRedirectUrl && participant.prolific) {
+      ui.setText("#screened-out-redirect-note", "Returning you to Prolific in 5 seconds…");
+      await ui.sleep(5000);
+      location.href = STUDY.screenoutRedirectUrl;
+    }
+    return;
   }
   ui.showScreen("screen-done");
 

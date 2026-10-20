@@ -28,7 +28,7 @@
 import { flattenRounded, DECIMALS } from "../tutor/landmarks.js";
 import { loadModel } from "../tutor/verifier.js";
 import { loadOpenFS } from "../tutor/openfs.js";
-import { LETTERS, pictureUrl } from "../tutor/letters.js";
+import { LETTERS, STATIC_LETTERS, pictureUrl } from "../tutor/letters.js";
 import { createPrng } from "../tutor/prng.js";
 import { TUTOR_VERSION } from "./asl-tutor/flow.js";
 import { createEngine, TUTOR_COMMIT_OPTS, EXPERT_COMMIT_OPTS } from "./asl-tutor/engine.js";
@@ -61,7 +61,9 @@ const MODEL_PATH = "tutor/model.json";
 // 2.8 (2026-10-18, Indranil): how they learned to fingerspell and its obstacles are asked BEFORE the task (after the
 // ASL check; sessions record `preTaskQuestionnaire`), and the screen before the practice asks them to think of
 // themselves, and anyone they know, first learning fingerspelling.
-export const STUDY_VERSION = "asl-study/2.8";
+// 2.9 (2026-10-20, owner): wherever the ASL check runs, the tenth wrong sign in the test rounds ends the task there
+// (EXPERT_STOP_WRONG); what was done is saved, with `screenedOut: true` and `stoppedEarly`.
+export const STUDY_VERSION = "asl-study/2.9";
 // JT, 2026-09-22: one pass for each test, ten for teaching.
 export const DEFAULT_REPS = Object.freeze({ pre: 1, teach: 10, post: 1 });
 /* Fluent signers (JT, 2026-09-29): straight to the test, each letter four times (JT: 4 rounds, 104 trials),
@@ -212,6 +214,17 @@ export function quizApplies(expert, participant, quizParam) {
   if (quizParam === "1") return true;
   return expert && participant?.source === "prolific";
 }
+/* Ten signs wrong in the test rounds and the person stops there (owner, 2026-10-20: "if they get over 9 signs wrong
+ * then they prob don't know finger spelling and shouldn't be made to do the whole thing"), wherever the ASL check runs.
+ * Only the 24 held letters count: J and Z are graded by the movement rule, which missed all four of a deaf signer's
+ * Z's (Prolific, 20 Oct). Of 96 held letters, real signers have got at most 7 wrong (Karen, the SDSU lab, the class
+ * students, the two Prolific signers who passed); the Prolific "expert" who passed the check and signed like a novice
+ * (15 of 96) would have stopped at the 11th sign. research/experts-prolific-2026-10-19. */
+export const EXPERT_STOP_WRONG = 10;
+export function tooManyWrong(summaries, limit = EXPERT_STOP_WRONG) {
+  const wrong = summaries.filter((s) => (s.kind === "pre" || s.kind === "post") && STATIC_LETTERS.includes(s.letter) && s.correct !== true).length;
+  return wrong >= limit ? { reason: "too-many-wrong", wrong, limit, afterTrials: summaries.length } : null;
+}
 /* The hold-still ring: expert mode's is longer (JT, 2026-10-07), the novice study keeps the tutor's. */
 export const commitOptsFor = (expert) => (expert ? EXPERT_COMMIT_OPTS : TUTOR_COMMIT_OPTS);
 const COMMIT_OPTS = commitOptsFor(EXPERT);
@@ -306,6 +319,9 @@ export default {
     return runSignQuiz({ seed: seedFromParticipant(participant?.participantId), fluency: demographics?.aslFluency, root, show });
   },
 
+  // After every trial (js/core/experiment.js): where the ASL check runs, too many wrong signs end the task.
+  stopEarly: (summaries) => (session?.stopRule ? tooManyWrong(summaries) : null),
+
   // Expert mode's own questions (JT, 2026-10-18): the ASL question first, years on a slider. The novice study keeps
   // questions.js DEMOGRAPHIC_QUESTIONS.
   demographicQuestions: EXPERT ? EXPERT_DEMOGRAPHIC_QUESTIONS : null,
@@ -366,6 +382,7 @@ export default {
     const plan = buildPlan(letters, reps, seed, EXPERT ? EXPERT_PHASES : PHASES);
     session = {
       letters, reps, seed, seedSource: urlSeed ? "url" : "participantId", plan, hand: studyHand(demographics),
+      stopRule: quizApplies(EXPERT, participant, params.get("quiz")),
       model: null, modelSha: null, engine: null, sessionLogged: false, replayExhausted: false,
       results: [],
     };
