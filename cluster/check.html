@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup check</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9C%8B%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main>
+  <h1>Setup check</h1>
+  <p class="subtle">This page tests each part of your setup and reports what to fix.
+     Run it after following <code>docs/SETUP.md</code>, and again on your live
+     GitHub&nbsp;Pages address before you recruit anyone.</p>
+
+  <div id="checks"></div>
+
+  <div id="stage" hidden style="max-width:320px">
+    <div class="mirror"><canvas id="overlay"></canvas></div>
+  </div>
+
+  <p class="subtle" id="summary"></p>
+</main>
+
+<script type="module">
+import { FIREBASE, MEDIAPIPE, RECORDING, ACTIVE_EXPERIMENT } from "./config.js";
+import { startCamera, stopCamera } from "./js/core/camera.js";
+import { createTracker } from "./js/core/tracker.js";
+
+const container = document.getElementById("checks");
+
+/* Each check renders a row, then resolves to true/false. A check that throws
+   fails with its error message shown to you rather than hidden in the console. */
+function row(name) {
+  const el = document.createElement("div");
+  el.className = "check busy";
+  el.innerHTML = `<div class="icon">…</div><div class="body">
+    <div class="name"></div><div class="detail">running…</div></div>`;
+  el.querySelector(".name").textContent = name;
+  container.append(el);
+  return {
+    pass(detail = "") { el.className = "check pass";
+      el.querySelector(".icon").textContent = "✅";
+      el.querySelector(".detail").textContent = detail; },
+    fail(detail = "") { el.className = "check fail";
+      el.querySelector(".icon").textContent = "❌";
+      el.querySelector(".detail").textContent = detail; },
+    skip(detail = "") { el.className = "check";
+      el.querySelector(".icon").textContent = "⏭️";
+      el.querySelector(".detail").textContent = detail; },
+  };
+}
+
+let failed = 0;
+async function check(name, fn) {
+  const r = row(name);
+  try {
+    const detail = await fn();
+    r.pass(detail || "OK");
+    return true;
+  } catch (err) {
+    failed++;
+    r.fail(err?.message || String(err));
+    return false;
+  }
+}
+function skip(name, why) { row(name).skip(why); }
+
+/* ------------------------------------------------------------------ */
+
+await check("Page is served securely", () => {
+  if (!window.isSecureContext) {
+    throw new Error(
+      "This page is not in a secure context, so the browser will refuse camera " +
+      "access.\n\nFix: don't open the file directly. From the project folder run\n" +
+      "    python3 -m http.server 8000\n" +
+      "then visit http://localhost:8000/check.html\n" +
+      "(A GitHub Pages https:// URL also works.)"
+    );
+  }
+  return location.origin;
+});
+
+await check("config.js has been filled in", () => {
+  const unfilled = Object.entries(FIREBASE)
+    .filter(([, v]) => typeof v === "string" && v.includes("PASTE_YOUR"))
+    .map(([k]) => k);
+  if (unfilled.length) {
+    throw new Error(
+      `These fields are still placeholders: ${unfilled.join(", ")}.\n\n` +
+      "Fix: Firebase Console → Project settings → Your apps → Web app → Config, " +
+      "then paste the values into FIREBASE in config.js. See docs/SETUP.md step 2."
+    );
+  }
+  return `project "${FIREBASE.projectId}", experiment "${ACTIVE_EXPERIMENT}"`;
+});
+
+let video = null;
+const cameraOk = await check("Webcam works", async () => {
+  video = await startCamera(RECORDING.video);
+  return `${video.videoWidth}×${video.videoHeight}`;
+});
+
+let tracker = null;
+let trackerOk = false;
+if (cameraOk) {
+  trackerOk = await check("MediaPipe model loads", async () => {
+    const t0 = performance.now();
+    tracker = await createTracker("hand", { numHands: 1 });
+    const ms = Math.round(performance.now() - t0);
+    const note = tracker.delegate === "CPU"
+      ? "\n\nNote: this computer could not give MediaPipe a GPU context, so " +
+        "tracking is running on the CPU. Everything works, but the frame rate " +
+        "will be lower. Enabling hardware acceleration in your browser settings " +
+        "usually fixes it."
+      : "";
+    return `hand landmarker ready in ${ms} ms on the ${tracker.delegate} ` +
+           `(tasks-vision ${MEDIAPIPE.version})` + note;
+  });
+} else {
+  skip("MediaPipe model loads", "skipped, because the camera check failed first");
+}
+
+if (trackerOk) {
+  await check("A hand can actually be detected", async () => {
+    const stage = document.getElementById("stage");
+    stage.hidden = false;
+    stage.querySelector(".mirror").prepend(video);
+    const canvas = document.getElementById("overlay");
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+
+    const deadline = performance.now() + 15000;
+    let frames = 0, hits = 0, lastVideoTime = -1;
+
+    while (performance.now() < deadline) {
+      if (video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const res = tracker.track(video, performance.now());
+        frames++;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (res.landmarks.length) {
+          hits++;
+          ctx.fillStyle = "#4ade80";
+          for (const p of res.landmarks[0]) {
+            ctx.beginPath();
+            ctx.arc(p.x * canvas.width, p.y * canvas.height, 4, 0, 7);
+            ctx.fill();
+          }
+          if (hits > 20) break;   // seen enough
+        }
+      }
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    stage.hidden = true;
+    if (!hits) {
+      throw new Error(
+        "No hand was detected in 15 seconds.\n\n" +
+        "Fix: hold one hand up in front of the camera and reload this page. " +
+        "If it still fails, try brighter lighting with the light source in " +
+        "front of you, and a plainer background."
+      );
+    }
+    return `${hits} detections in ${frames} frames`;
+  });
+} else {
+  skip("A hand can actually be detected", "skipped, because the model did not load");
+}
+
+stopCamera(video);
+tracker?.close();
+
+/* ---- Firebase -------------------------------------------------------- */
+let db = null, uid = null;
+const SDK = "https://www.gstatic.com/firebasejs/12.17.1";
+
+const authOk = await check("Firebase anonymous sign-in", async () => {
+  const { initializeApp } = await import(`${SDK}/firebase-app.js`);
+  const { getAuth, signInAnonymously } = await import(`${SDK}/firebase-auth.js`);
+  const { getFirestore } = await import(`${SDK}/firebase-firestore.js`);
+  const app = initializeApp(FIREBASE);
+  db = getFirestore(app);
+  try {
+    const cred = await signInAnonymously(getAuth(app));
+    uid = cred.user.uid;
+  } catch (err) {
+    if (String(err?.code).includes("operation-not-allowed")) {
+      throw new Error(
+        "Anonymous sign-in is disabled for this project.\n\n" +
+        "Fix: Firebase Console → Build → Authentication → Sign-in method → " +
+        "Anonymous → Enable. See docs/SETUP.md step 3."
+      );
+    }
+    if (String(err?.code).includes("api-key-not-valid")) {
+      throw new Error(
+        "Firebase rejected the API key in config.js.\n\n" +
+        "Fix: re-copy the config object from Firebase Console → Project " +
+        "settings → Your apps. Make sure you copied it from a WEB app."
+      );
+    }
+    throw err;
+  }
+  return `signed in as ${uid.slice(0, 10)}…`;
+});
+
+if (authOk) {
+  await check("Writing data to Firestore", async () => {
+    const { doc, setDoc, serverTimestamp } = await import(`${SDK}/firebase-firestore.js`);
+    const id = `_selftest_${Date.now()}`;
+    try {
+      // Exactly the same shape as a real session, so this tests the real rules.
+      await setDoc(doc(db, "sessions", id, "chunks", "000_000"), {
+        uid, sessionId: id, experimentId: "_selftest",
+        trialIndex: 0, trialId: "selftest", chunkIndex: 0, chunkCount: 1,
+        frames: [{ t: 0, lm: null, wl: null, d: {} }],
+        uploadedAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, "sessions", id), {
+        uid, sessionId: id, experimentId: "_selftest",
+        experimentTitle: "Setup check", participantId: "_selftest",
+        startedAt: new Date().toISOString(), trials: [],
+        schemaVersion: 1, finishedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      if (String(err?.code).includes("permission-denied")) {
+        throw new Error(
+          "Firestore refused the write (permission denied).\n\n" +
+          "Fix: publish the rules from firestore.rules. Firebase Console, " +
+          "Build → Firestore Database → Rules → paste → Publish. " +
+          "See docs/SETUP.md step 4."
+        );
+      }
+      if (String(err?.code).includes("unavailable") || String(err).includes("NOT_FOUND")) {
+        throw new Error(
+          "Could not reach Firestore. Has the database been created yet?\n\n" +
+          "Fix: Firebase Console → Build → Firestore Database → Create database."
+        );
+      }
+      throw err;
+    }
+    return `wrote sessions/${id} (safe to delete; fetch_data.py ignores it)`;
+  });
+} else {
+  skip("Writing data to Firestore", "skipped, because sign-in failed");
+}
+
+document.getElementById("summary").textContent = failed === 0
+  ? "All checks passed. You are ready to collect data. Open index.html."
+  : `${failed} check(s) failed. Fix the red items above, then reload this page.`;
+</script>
+</body>
+</html>
