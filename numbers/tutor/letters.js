@@ -142,13 +142,15 @@ export function pictureUrl(letter) {
   return PICTURE_LETTERS.includes(letter) ? `assets/numbers/${letter}.${letter === "10" ? "svg" : "jpg"}` : null;
 }
 
-/* The numbers that move are shown as a video, in place of the picture: Learn How to Sign's (LearnHowToSign.org), each
- * a few seconds of that one number, signed with the right hand, palm toward the signer as taught. They are embedded
- * from YouTube (muted, looping), never copied onto the site, so their licence lets us show them; credited on the page.
- * (ASL Citizen's clips were the first choice; its licence forbids publishing them.) NOT mirrored as the pictures are:
- * YouTube's title and buttons on top of the video would read backwards. */
-export const VIDEOS = Object.freeze({ 10: "4AsxrhAlxkU", 11: "lBCPdB4oBZ0", 12: "z29X3s8Bmew", 15: "77vJBMRvh38" });
+/* The numbers that move are shown as a video, in place of the picture: Signing With Omar's ("Sign Language: Numbers
+ * 1-30 | ASL for Beginners", YouTube Shorts Seu5opfQpZU, 2022), cut to one number each by Indranil and played at half
+ * speed (27 Oct: "the slowed version ... so the hand is positioned better"; tools/make-number-videos.sh). Right hand,
+ * palm toward the signer, as taught; 15 is his one full bend played forward and back (the script says why). Kept on the
+ * site and credited on the video itself (VIDEO_CREDIT). Mirrored as the pictures are (pictureMirrored), so the hand in
+ * the video moves the way the learner's own does on their screen. Until 27 Oct these were Learn How to Sign's YouTube
+ * videos, embedded, which in the study's layout showed small, cut off at the hand, under YouTube's buttons. */
+export const VIDEOS = Object.freeze(Object.fromEntries(["10", "11", "12", "15"].map((n) => [n, `assets/numbers/video/${n}.mp4`])));
+export const VIDEO_CREDIT = "Video: Signing With Omar";
 export function videoUrl(letter) {
-  const id = VIDEOS[letter];
-  return id ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}&playsinline=1&controls=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1` : null;
+  return VIDEOS[letter] ?? null;
 }

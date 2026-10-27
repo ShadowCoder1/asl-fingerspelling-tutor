@@ -23,7 +23,7 @@
  * colorblind readers; the reward flash is a brief additive glow, never a
  * flashing element. */
 
-import { LETTERS, PICTURE_CAPTION, NOUN, pictureMirrored, videoUrl } from "../../tutor/letters.js";
+import { LETTERS, PICTURE_CAPTION, NOUN, pictureMirrored, videoUrl, VIDEO_CREDIT } from "../../tutor/letters.js";
 
 /* The note that has to be on screen the whole time, not behind a link. This
  * tutor grades with a model fitted on posed photographs from public datasets;
@@ -183,19 +183,23 @@ export function mountTutor(el, { letters, hintPolicy, layout = "tutor", hand = "
     // rather than assumed away: the description then does the whole job, and
     // the caption goes with the picture, instead of an empty frame pretending
     // there is something to look at.
-    // a number that moves is shown moving (tutor/letters.js videoUrl): the video takes the picture's place. Not
-    // mirrored as the pictures are: YouTube's own title and buttons would read backwards.
+    // a number that moves is shown moving (tutor/letters.js videoUrl): the video takes the picture's place, muted and
+    // looping, mirrored as the picture would be, its maker credited on it.
     const video = showPicture ? videoUrl(letter) : null;
     nodes.video.hidden = !video;
     if (!video) nodes.video.replaceChildren();
     else if (nodes.video.dataset.src !== video) {
-      const frame = document.createElement("iframe");
-      frame.src = video;
-      frame.title = `How to sign the ${NOUN} ${letter}.`;
-      frame.allow = "autoplay; encrypted-media; picture-in-picture";
-      frame.referrerPolicy = "strict-origin-when-cross-origin";
-      frame.loading = "eager";
-      nodes.video.replaceChildren(frame);
+      const clip = document.createElement("video");
+      for (const a of ["muted", "loop", "autoplay", "playsinline", "disablepictureinpicture", "disableremoteplayback"]) clip.setAttribute(a, "");
+      clip.muted = true;
+      clip.setAttribute("aria-label", `How to sign the ${NOUN} ${letter}.`);
+      clip.src = video;
+      clip.classList.toggle("tutor-picture-flip", pictureMirrored(letter, hand));
+      const credit = document.createElement("span");
+      credit.className = "tutor-video-credit";
+      credit.textContent = VIDEO_CREDIT ?? "";
+      nodes.video.replaceChildren(clip, credit);
+      clip.play()?.catch(() => {});
     }
     nodes.video.dataset.src = video ?? "";
     const hasPicture = showPicture && !video && typeof pictureUrl === "string";

@@ -314,10 +314,10 @@
 
 /* tutor/letters.js pictureMirrored: shown as it looks on the learner's own mirrored screen. */
 .tutor-picture-flip { transform: scaleX(-1); }
-/* a number that moves: its video in the picture's place, cropped square to the signer and her hand */
-.tutor-video:not([hidden]) { display: block; position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: 10px; background: #5d8fb8; }
-/* zoomed a little, so YouTube's title (along the top) and logo (bottom right) mostly fall outside the box */
-.tutor-video iframe { position: absolute; top: -15%; left: 50%; width: 231%; height: 130%; transform: translateX(-50%); border: 0; }
+/* a number that moves: its video in the picture's place, square around the hand, its maker's name along the bottom */
+.tutor-video:not([hidden]) { display: block; position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: 14px; background: var(--soft); }
+.tutor-video video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tutor-video-credit { position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 0.68rem; line-height: 1.5; pointer-events: none; }
 
 /* ---- the burst: a hold was taken ----------------------------------------- */
 /* A wave off the ring and twelve sparks flying out along their own angles.
@@ -448,6 +448,8 @@
     object-fit: contain;
     padding: 10px;
   }
+  /* the video takes the drawing's place: the full height of its half */
+  .tutor-layout-study .tutor-video:not([hidden]) { grid-area: pic; width: 100%; height: 100%; aspect-ratio: auto; min-height: 0; }
   .tutor-layout-study .tutor-picture-slot { container-type: size; }
   .tutor-layout-study .tutor-describe { grid-area: describe; text-align: left; }
   .tutor-layout-study .tutor-mnemonic { grid-area: mnemonic; text-align: left; }
